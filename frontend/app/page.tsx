@@ -1,0 +1,271 @@
+'use client';
+
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { isAuthenticated } from '@/lib/auth';
+import { articlesApi, scrapeApi, sourcesApi, entitiesApi, getExportUrl } from '@/lib/api';
+import type { Article, Source, Entity, ArticleFilters } from '@/lib/api';
+import NavBar from '@/components/NavBar';
+import ArticleCard from '@/components/ArticleCard';
+import { RefreshCw, Search, ChevronDown, Download, X } from 'lucide-react';
+
+const LIMIT = 25;
+
+export default function DashboardPage() {
+  const router = useRouter();
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [scraping, setScraping] = useState(false);
+  const [sources, setSources] = useState<Source[]>([]);
+  const [entities, setEntities] = useState<Entity[]>([]);
+  const [filters, setFilters] = useState<ArticleFilters>({ limit: LIMIT, offset: 0 });
+  const [search, setSearch] = useState('');
+  const [banner, setBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      router.replace('/login');
+      return;
+    }
+    Promise.all([sourcesApi.list(), entitiesApi.list()]).then(([s, e]) => {
+      setSources(s.data);
+      setEntities(e.data);
+    }).catch(() => {});
+  }, [router]);
+
+  const fetchArticles = useCallback(async (currentFilters: ArticleFilters, currentOffset: number, append = false) => {
+    setLoading(true);
+    try {
+      const res = await articlesApi.list({ ...currentFilters, offset: currentOffset });
+      const data = res.data;
+      const items: Article[] = Array.isArray(data) ? data : ((data as { items?: Article[] }).items ?? []);
+      const tot: number = Array.isArray(data) ? items.length : ((data as { total?: number }).total ?? items.length);
+      setTotal(tot);
+      setArticles(prev => append ? [...prev, ...items] : items);
+    } catch {
+      // backend may not be running during development
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated()) {
+      fetchArticles(filters, 0, false);
+      setOffset(0);
+    }
+  }, [filters, fetchArticles]);
+
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    setFilters(prev => ({ ...prev, search: search || undefined, offset: 0 }));
+  }
+
+  function handleLoadMore() {
+    const newOffset = offset + LIMIT;
+    setOffset(newOffset);
+    fetchArticles(filters, newOffset, true);
+  }
+
+  function showBanner(type: 'success' | 'error', message: string) {
+    if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+    setBanner({ type, message });
+    bannerTimerRef.current = setTimeout(() => setBanner(null), 8000);
+  }
+
+  function dismissBanner() {
+    if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+    setBanner(null);
+  }
+
+  async function handleScrape() {
+    setScraping(true);
+    try {
+      const res = await scrapeApi.run();
+      const data = res.data as { status?: string; articles_inserted?: number; articles_tagged?: number; articles_translated?: number };
+      if (data.articles_inserted !== undefined) {
+        showBanner(
+          'success',
+          `Scrape complete — ${data.articles_inserted} new articles, ${data.articles_tagged ?? 0} entities matched, ${data.articles_translated ?? 0} translated`,
+        );
+      } else {
+        showBanner('success', 'Scrape started — new articles will appear shortly');
+      }
+      fetchArticles(filters, 0, false);
+      setOffset(0);
+    } catch {
+      showBanner('error', 'Scrape failed — check server logs');
+    } finally {
+      setScraping(false);
+    }
+  }
+
+  function handleExport() {
+    const url = getExportUrl(filters);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  const hasMore = articles.length < total;
+
+  return (
+    <div className="min-h-screen" style={{ backgroundColor: '#0f1117' }}>
+      <NavBar />
+
+      <main className="max-w-4xl mx-auto px-4 py-6">
+        {/* Result banner */}
+        {banner && (
+          <div
+            className={`flex items-center justify-between gap-3 rounded-lg px-4 py-2.5 mb-4 text-sm ${
+              banner.type === 'success'
+                ? 'bg-emerald-900/60 border border-emerald-700 text-emerald-200'
+                : 'bg-red-900/60 border border-red-700 text-red-200'
+            }`}
+          >
+            <span>{banner.message}</span>
+            <button
+              onClick={dismissBanner}
+              className="shrink-0 opacity-70 hover:opacity-100 transition-opacity"
+              aria-label="Dismiss"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-lg font-semibold text-slate-100">Article Feed</h1>
+            <p className="text-sm text-slate-500">{total} articles</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm text-slate-300 hover:text-slate-100 transition-colors"
+              style={{ borderColor: '#2a2d3a' }}
+            >
+              <Download size={14} />
+              Export CSV
+            </button>
+            <button
+              onClick={handleScrape}
+              disabled={scraping}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
+            >
+              <RefreshCw size={14} className={scraping ? 'animate-spin' : ''} />
+              {scraping ? 'Scraping...' : 'Run Scrape'}
+            </button>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div
+          className="rounded-lg border p-4 mb-5 space-y-3"
+          style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}
+        >
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search articles..."
+              className="flex-1 rounded-lg border px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-blue-500"
+              style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a' }}
+            />
+            <button
+              type="submit"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm text-slate-300 hover:text-slate-100 transition-colors"
+              style={{ borderColor: '#2a2d3a' }}
+            >
+              <Search size={14} />
+              Search
+            </button>
+          </form>
+
+          <div className="flex flex-wrap gap-2">
+            <select
+              className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
+              style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
+              onChange={(e) => setFilters(prev => ({ ...prev, source_id: e.target.value ? Number(e.target.value) : undefined }))}
+            >
+              <option value="">All Sources</option>
+              {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+
+            <select
+              className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
+              style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
+              onChange={(e) => setFilters(prev => ({ ...prev, entity_id: e.target.value ? Number(e.target.value) : undefined }))}
+            >
+              <option value="">All Entities</option>
+              {entities.map(en => <option key={en.id} value={en.id}>{en.name}</option>)}
+            </select>
+
+            <select
+              className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
+              style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
+              onChange={(e) => setFilters(prev => ({ ...prev, topic: e.target.value || undefined }))}
+            >
+              <option value="">All Topics</option>
+              {['ceasefire', 'mediation', 'border_security', 'election', 'bri'].map(t => (
+                <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
+              ))}
+            </select>
+
+            <input
+              type="date"
+              className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
+              style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
+              onChange={(e) => setFilters(prev => ({ ...prev, from_date: e.target.value || undefined }))}
+            />
+            <input
+              type="date"
+              className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
+              style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
+              onChange={(e) => setFilters(prev => ({ ...prev, to_date: e.target.value || undefined }))}
+            />
+          </div>
+        </div>
+
+        {/* Article list */}
+        {loading && articles.length === 0 ? (
+          <div className="text-center py-16 text-slate-500 text-sm">Loading articles...</div>
+        ) : articles.length === 0 ? (
+          <div className="text-center py-16 text-slate-500 text-sm">No articles found.</div>
+        ) : (
+          <div className="space-y-3">
+            {articles.map(article => (
+              <ArticleCard key={article.id} article={article} />
+            ))}
+          </div>
+        )}
+
+        {/* Load more */}
+        {hasMore && !loading && (
+          <div className="mt-5 flex justify-center">
+            <button
+              onClick={handleLoadMore}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg border text-sm text-slate-400 hover:text-slate-200 transition-colors"
+              style={{ borderColor: '#2a2d3a' }}
+            >
+              <ChevronDown size={14} />
+              Load More
+            </button>
+          </div>
+        )}
+
+        {loading && articles.length > 0 && (
+          <div className="mt-5 text-center text-sm text-slate-500">Loading more...</div>
+        )}
+      </main>
+    </div>
+  );
+}
