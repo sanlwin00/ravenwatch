@@ -98,12 +98,13 @@ async def _enrich_articles(db: Client, articles: list[dict]) -> list[dict]:
     for row in (topic_res.data or []):
         article_topic_map[row["article_id"]].append(row["topic"])
 
-    # Merge enrichment into articles
+    # Merge enrichment into articles using field names the frontend expects
     for article in articles:
         aid = article["id"]
-        article["source_name"] = source_map.get(article.get("source_id"), None)
-        article["entity_tags"] = article_entity_map.get(aid, [])
-        article["topic_tags"] = article_topic_map.get(aid, [])
+        src_id = article.get("source_id")
+        article["source"] = {"id": src_id, "name": source_map.get(src_id)} if src_id else None
+        article["entities"] = article_entity_map.get(aid, [])
+        article["topics"] = article_topic_map.get(aid, [])
 
     return articles
 
