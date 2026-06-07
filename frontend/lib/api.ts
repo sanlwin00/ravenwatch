@@ -44,10 +44,12 @@ export interface Entity {
 }
 
 export interface Source {
-  id: number;
+  id: string;
   name: string;
   url: string;
   language: string;
+  type: string;
+  active: boolean;
 }
 
 export interface Article {
@@ -107,6 +109,8 @@ export const entitiesApi = {
 
 export const sourcesApi = {
   list: () => api.get<Source[]>('/api/v1/sources'),
+  update: (id: string, url: string, active?: boolean) =>
+    api.put<Source>(`/api/v1/sources/${id}`, { url, active }),
 };
 
 export const scrapeApi = {
