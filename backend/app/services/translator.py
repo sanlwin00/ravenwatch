@@ -162,10 +162,19 @@ async def translate_pending_articles(db: Client) -> dict:
     for article in pending:
         article_id = str(article["id"])
 
-        # Skip English-language sources upfront
+        # English articles: copy raw_text_original → raw_text_en so tagger can run
         if (article.get("language_original") or "").lower() == "en":
-            logger.debug("Article %s is English — skipping", article_id)
-            skipped += 1
+            try:
+                orig = db.table("articles").select("raw_text_original").eq("id", article_id).single().execute()
+                raw_original = (orig.data or {}).get("raw_text_original") or ""
+                if raw_original:
+                    db.table("articles").update({"raw_text_en": raw_original}).eq("id", article_id).execute()
+                    translated += 1
+                else:
+                    skipped += 1
+            except Exception as exc:
+                logger.warning("Failed to copy raw_text_original for English article %s: %s", article_id, exc)
+                skipped += 1
             continue
 
         success = await translate_article(article_id, db)
