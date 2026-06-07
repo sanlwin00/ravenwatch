@@ -59,29 +59,47 @@ def _is_article_link(link: str, base_url: str) -> bool:
     if not link or link.startswith('#') or link.startswith('javascript') or link.startswith('mailto'):
         return False
 
-    # Must be same domain (allow relative links too — netloc will be empty)
+    # Must be same domain
     if parsed.netloc and parsed.netloc != base.netloc:
         return False
 
     path = parsed.path.rstrip('/')
 
-    # Must have meaningful path depth
     segments = [s for s in path.split('/') if s]
     if len(segments) < 2:
         return False
 
-    # Skip very short generic nav paths
+    # Skip exact generic paths
     generic_paths = {'/en', '/news', '/about', '/contact', '/home', '/search',
                      '/category', '/tag', '/author', '/feed', '/rss', '/sitemap'}
     if path in generic_paths:
         return False
 
-    # Positive signals: date in URL, .html/.htm extension, deep path
+    # Skip paths whose last segment is a generic section/service word
+    nav_keywords = {
+        'about', 'contact', 'search', 'category', 'categories', 'tag', 'tags',
+        'author', 'feed', 'rss', 'sitemap', 'home', 'index', 'archive', 'archives',
+        'page', 'login', 'register', 'subscribe', 'newsletter', 'policy', 'privacy',
+        'terms', 'services', 'service', 'consularservices', 'visas', 'legalization',
+        'passports', 'authentication', 'notarization', 'eng', 'cn', 'en', 'zh',
+    }
+    last_segment = segments[-1].lower().rstrip('/')
+    if last_segment in nav_keywords:
+        return False
+
+    # Positive signals: date, numeric ID, .html extension
     has_date = bool(re.search(r'/20\d{2}[/_\-]', link))
     has_html = path.endswith('.html') or path.endswith('.htm')
-    has_long_slug = len(segments) >= 3
+    has_numeric_id = bool(re.search(r'/\d{4,}', path))
+    # Long slug: final segment looks like a real article title (contains letters, long enough)
+    has_title_slug = (
+        len(segments) >= 3
+        and len(last_segment) >= 10
+        and re.search(r'[a-zA-Z一-鿿]', last_segment)
+        and not last_segment.isdigit()
+    )
 
-    return has_date or has_html or has_long_slug
+    return has_date or has_html or has_numeric_id or has_title_slug
 
 
 # ---------------------------------------------------------------------------

@@ -9,9 +9,10 @@ interface ArticleCardProps {
 }
 
 export default function ArticleCard({ article }: ArticleCardProps) {
-  const pubDate = article.published_at
-    ? format(new Date(article.published_at), 'MMM d, yyyy HH:mm')
-    : 'Unknown date';
+  const dateStr = article.published_at || article.scraped_at;
+  const pubDate = dateStr
+    ? format(new Date(dateStr), 'MMM d, yyyy')
+    : null;
 
   return (
     <Link href={`/articles/${article.id}`} className="block">
@@ -43,8 +44,7 @@ export default function ArticleCard({ article }: ArticleCardProps) {
             {/* Meta */}
             <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-500">
               <span className="font-medium text-slate-400">{article.source?.name}</span>
-              <span>·</span>
-              <span>{pubDate}</span>
+              {pubDate && <><span>·</span><span>{pubDate}</span></>}
             </div>
 
             {/* Tags */}
