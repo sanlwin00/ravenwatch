@@ -6,7 +6,8 @@ from __future__ import annotations
 import logging
 from io import StringIO
 
-import pandas as pd
+import csv
+
 from supabase import Client
 
 logger = logging.getLogger(__name__)
@@ -144,8 +145,8 @@ async def export_articles_csv(
             "summary_en": article.get("summary_en") or "",
         })
 
-    df = pd.DataFrame(rows, columns=["title", "source_name", "published_at", "url", "entities", "topics", "summary_en"])
-
     buffer = StringIO()
-    df.to_csv(buffer, index=False)
+    writer = csv.DictWriter(buffer, fieldnames=["title", "source_name", "published_at", "url", "entities", "topics", "summary_en"])
+    writer.writeheader()
+    writer.writerows(rows)
     return buffer.getvalue()
