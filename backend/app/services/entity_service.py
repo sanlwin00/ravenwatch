@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from supabase import Client
 
 from app.services.entity_seed import seed_entities as _seed_entities

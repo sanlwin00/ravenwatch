@@ -15,7 +15,7 @@ import { ArrowLeft, ExternalLink } from 'lucide-react';
 export default function ArticleDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const id = Number(params.id);
+  const id = params.id as string;
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

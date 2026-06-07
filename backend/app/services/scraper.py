@@ -2,19 +2,23 @@
 RavenWatch scraper service.
 
 Flow per source:
-  1. Try Firecrawl API (async httpx)
-  2. Fall back to requests + BeautifulSoup if Firecrawl fails
-  3. Deduplicate against the articles table by URL
-  4. Insert new articles with correct signal flags and expiry
-  5. Update sources.last_scraped_at
+  1. Fetch the article listing page (source URL)
+  2. Extract individual article links (via Firecrawl links format, falling back to BS4)
+  3. Follow pagination up to 3 pages per source
+  4. For each new (not yet in DB) article link, scrape full content
+  5. Deduplicate against the articles table by URL
+  6. Insert new articles with correct signal flags and expiry
+  7. Update sources.last_scraped_at
 """
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
+import re
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+from urllib.parse import urlparse, urljoin
 
 import httpx
 import requests
@@ -32,9 +36,216 @@ BS4_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; RavenWatch/1.0)"}
 BS4_TIMEOUT = 15  # seconds
 DEFAULT_RETENTION_DAYS = 30
 
+# Per-source crawl limits
+MAX_LINKS_PER_PAGE = 15
+MAX_LISTING_PAGES = 3
+MAX_NEW_ARTICLES_PER_SOURCE = 20
+
 
 # ---------------------------------------------------------------------------
-# Low-level fetchers
+# Link filtering heuristic
+# ---------------------------------------------------------------------------
+
+
+def _is_article_link(link: str, base_url: str) -> bool:
+    """Heuristic: is this link likely to be an individual news article?"""
+    try:
+        parsed = urlparse(link)
+        base = urlparse(base_url)
+    except Exception:
+        return False
+
+    # Skip fragments, javascript, mailto
+    if not link or link.startswith('#') or link.startswith('javascript') or link.startswith('mailto'):
+        return False
+
+    # Must be same domain (allow relative links too — netloc will be empty)
+    if parsed.netloc and parsed.netloc != base.netloc:
+        return False
+
+    path = parsed.path.rstrip('/')
+
+    # Must have meaningful path depth
+    segments = [s for s in path.split('/') if s]
+    if len(segments) < 2:
+        return False
+
+    # Skip very short generic nav paths
+    generic_paths = {'/en', '/news', '/about', '/contact', '/home', '/search',
+                     '/category', '/tag', '/author', '/feed', '/rss', '/sitemap'}
+    if path in generic_paths:
+        return False
+
+    # Positive signals: date in URL, .html/.htm extension, deep path
+    has_date = bool(re.search(r'/20\d{2}[/_\-]', link))
+    has_html = path.endswith('.html') or path.endswith('.htm')
+    has_long_slug = len(segments) >= 3
+
+    return has_date or has_html or has_long_slug
+
+
+# ---------------------------------------------------------------------------
+# Pagination link detection
+# ---------------------------------------------------------------------------
+
+
+def _find_next_page(soup: BeautifulSoup, current_url: str) -> Optional[str]:
+    """
+    Look for a 'next page' link in parsed HTML.
+    Returns the absolute URL of the next page, or None.
+    """
+    next_patterns = re.compile(
+        r'\b(next|older|下一页|下一頁|›|»|older\s+posts?|next\s+page)\b',
+        re.IGNORECASE
+    )
+
+    for a_tag in soup.find_all('a', href=True):
+        text = a_tag.get_text(strip=True)
+        href = a_tag['href']
+
+        if not text and not href:
+            continue
+
+        # Match link text
+        if next_patterns.search(text):
+            abs_url = urljoin(current_url, href)
+            if abs_url != current_url:
+                return abs_url
+
+        # Match href patterns like ?page=N, /page/N/, ?start=N
+        if re.search(r'[?/](page[=/]\d+|start=\d+)', href, re.IGNORECASE):
+            abs_url = urljoin(current_url, href)
+            if abs_url != current_url:
+                return abs_url
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Link extraction from listing pages
+# ---------------------------------------------------------------------------
+
+
+async def _extract_article_links_firecrawl(
+    listing_url: str, source: dict
+) -> tuple[list[str], Optional[str]]:
+    """
+    Use Firecrawl with formats=["links"] to extract candidate article URLs.
+    Returns (article_urls, next_page_url_or_None).
+    """
+    api_key = os.environ.get("FIRECRAWL_API_KEY", "")
+    if not api_key:
+        return [], None
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                FIRECRAWL_ENDPOINT,
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={"url": listing_url, "formats": ["links"]},
+            )
+        if resp.status_code != 200:
+            logger.warning(
+                "Firecrawl links request returned %s for %s",
+                resp.status_code, listing_url
+            )
+            return [], None
+
+        data = resp.json()
+        result = data.get("data", {})
+        raw_links: list[str] = result.get("links") or []
+
+        article_links = []
+        for link in raw_links:
+            abs_link = urljoin(listing_url, link)
+            if _is_article_link(abs_link, listing_url):
+                article_links.append(abs_link)
+            if len(article_links) >= MAX_LINKS_PER_PAGE:
+                break
+
+        # Firecrawl doesn't return next-page link natively; we need the HTML for that.
+        # Return links only; caller falls back to BS4 for pagination.
+        return article_links, None
+
+    except Exception as exc:
+        logger.warning("Firecrawl links exception for %s: %s", listing_url, exc)
+        return [], None
+
+
+def _extract_article_links_bs4_sync(
+    listing_url: str, source: dict
+) -> tuple[list[str], Optional[str]]:
+    """
+    Synchronous BS4-based link extraction from a listing page.
+    Returns (article_urls, next_page_url_or_None).
+    """
+    try:
+        resp = requests.get(listing_url, timeout=BS4_TIMEOUT, headers=BS4_HEADERS)
+        resp.raise_for_status()
+    except Exception as exc:
+        logger.warning("BS4 listing request failed for %s: %s", listing_url, exc)
+        return [], None
+
+    try:
+        soup = BeautifulSoup(resp.content, "lxml")
+
+        article_links = []
+        seen = set()
+        for a_tag in soup.find_all('a', href=True):
+            href = a_tag['href']
+            if not href:
+                continue
+            abs_link = urljoin(listing_url, href)
+            if abs_link in seen:
+                continue
+            seen.add(abs_link)
+            if _is_article_link(abs_link, listing_url):
+                article_links.append(abs_link)
+            if len(article_links) >= MAX_LINKS_PER_PAGE:
+                break
+
+        next_page = _find_next_page(soup, listing_url)
+        return article_links, next_page
+
+    except Exception as exc:
+        logger.warning("BS4 listing parse error for %s: %s", listing_url, exc)
+        return [], None
+
+
+async def _extract_article_links(
+    listing_url: str, source: dict
+) -> tuple[list[str], Optional[str]]:
+    """
+    Extract article links from a listing page.
+    Tries Firecrawl first for the link list; always uses BS4 for pagination detection.
+    Returns (article_link_list, next_page_url_or_None).
+    """
+    # Try Firecrawl for links
+    fc_links, _ = await _extract_article_links_firecrawl(listing_url, source)
+
+    # Always run BS4 to get both fallback links AND pagination
+    bs4_links, next_page = await asyncio.to_thread(
+        _extract_article_links_bs4_sync, listing_url, source
+    )
+
+    # Merge: prefer Firecrawl links if we got them, supplement with BS4
+    if fc_links:
+        # Combine, dedup, cap
+        seen = set(fc_links)
+        combined = list(fc_links)
+        for link in bs4_links:
+            if link not in seen:
+                combined.append(link)
+                seen.add(link)
+        links = combined[:MAX_LINKS_PER_PAGE]
+    else:
+        links = bs4_links[:MAX_LINKS_PER_PAGE]
+
+    return links, next_page
+
+
+# ---------------------------------------------------------------------------
+# Low-level article fetchers
 # ---------------------------------------------------------------------------
 
 
@@ -155,27 +366,66 @@ async def _fetch_article(url: str) -> Optional[dict]:
 # ---------------------------------------------------------------------------
 
 
-async def scrape_source(source: dict) -> list[dict]:
+async def scrape_source(source: dict, db: Client) -> list[dict]:
     """
-    Scrape a single source (its homepage / landing URL).
+    Scrape a single source using multi-level article crawling:
+      1. Fetch listing page(s) and extract individual article links
+      2. Follow pagination up to MAX_LISTING_PAGES
+      3. For each new (not yet in DB) article link, scrape full content
+
     Returns a list of article dicts ready for insertion.
-
-    Each dict has the shape expected by _insert_article:
-      title, url, raw_text, published_at, source (the source dict).
+    Each dict has the shape: title, url, raw_text, published_at, source.
     """
-    url: str = source.get("url", "")
-    name: str = source.get("name", url)
+    listing_url: str = source.get("url", "")
+    name: str = source.get("name", listing_url)
 
-    logger.info("Scraping source: %s (%s)", name, url)
+    logger.info("Scraping source: %s (%s)", name, listing_url)
 
-    article = await _fetch_article(url)
-    if article is None:
-        logger.warning("No content returned for source %s", name)
+    all_article_urls: list[str] = []
+    next_page_url: Optional[str] = listing_url
+
+    for page_num in range(MAX_LISTING_PAGES):
+        if not next_page_url:
+            break
+
+        logger.debug("Extracting links from listing page %d: %s", page_num + 1, next_page_url)
+        links, next_page_url = await _extract_article_links(next_page_url, source)
+
+        if not links:
+            logger.debug("No article links found on page %d for %s", page_num + 1, name)
+            break
+
+        all_article_urls.extend(links)
+        logger.debug(
+            "Found %d links on page %d for %s (total so far: %d)",
+            len(links), page_num + 1, name, len(all_article_urls)
+        )
+
+        # Hard cap: no need to fetch more listing pages
+        if len(all_article_urls) >= MAX_LISTING_PAGES * MAX_LINKS_PER_PAGE:
+            break
+
+    if not all_article_urls:
+        logger.warning("No article links extracted for source %s — no articles to scrape", name)
         return []
 
-    # Attach the source record so _insert_article can use it
-    article["source"] = source
-    return [article]
+    # Dedup against DB and cap total new articles
+    new_urls = [u for u in all_article_urls if not _url_exists(db, u)]
+    new_urls = new_urls[:MAX_NEW_ARTICLES_PER_SOURCE]
+
+    logger.info(
+        "Source %s: %d candidate links → %d new (after dedup, cap %d)",
+        name, len(all_article_urls), len(new_urls), MAX_NEW_ARTICLES_PER_SOURCE
+    )
+
+    articles = []
+    for url in new_urls:
+        article = await _fetch_article(url)
+        if article:
+            article["source"] = source
+            articles.append(article)
+
+    return articles
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +485,7 @@ def _insert_article(db: Client, article: dict, retention_days: int) -> bool:
 
     row = {
         "source_id": source.get("id"),
-        "title": article.get("title") or None,
+        "title": article.get("title") or f"[{source.get('name', 'Unknown')}] {now.strftime('%Y-%m-%d')}",
         "url": url,
         "published_at": published_at_iso,
         "raw_text_original": article.get("raw_text") or None,
@@ -296,7 +546,7 @@ async def scrape_all_sources(db: Client) -> dict:
     for source in active_sources:
         sources_attempted += 1
         try:
-            articles = await scrape_source(source)
+            articles = await scrape_source(source, db)
             articles_found += len(articles)
 
             for article in articles:

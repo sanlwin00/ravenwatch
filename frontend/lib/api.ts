@@ -95,7 +95,7 @@ export const authApi = {
 export const articlesApi = {
   list: (filters?: ArticleFilters) =>
     api.get<PaginatedArticles | Article[]>('/api/v1/articles', { params: filters }),
-  get: (id: number) => api.get<Article>(`/api/v1/articles/${id}`),
+  get: (id: string | number) => api.get<Article>(`/api/v1/articles/${id}`),
 };
 
 export const entitiesApi = {

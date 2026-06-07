@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from supabase import Client
 
 TABLE = "platform_settings"

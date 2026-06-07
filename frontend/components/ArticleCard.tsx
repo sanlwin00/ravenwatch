@@ -37,7 +37,7 @@ export default function ArticleCard({ article }: ArticleCardProps) {
 
             {/* Title */}
             <h3 className="text-sm font-medium text-slate-100 leading-snug line-clamp-2">
-              {article.title}
+              {article.title || <span className="text-slate-500 italic">Untitled — {article.source?.name}</span>}
             </h3>
 
             {/* Meta */}

@@ -1,0 +1,29 @@
+{
+  "cookies": [
+    {
+      "name": "rw_token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbmFseXN0MUByYXZlbndhdGNoLmxvY2FsIiwiZXhwIjoxNzgwODM1NDk0fQ.HqWguNua2HRp-u-BDqminfRCKTnrdhQJtRHfwwzGbZ8",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1781353894,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "http://localhost:3000",
+      "localStorage": [
+        {
+          "name": "rw_token",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbmFseXN0MUByYXZlbndhdGNoLmxvY2FsIiwiZXhwIjoxNzgwODM1NDk0fQ.HqWguNua2HRp-u-BDqminfRCKTnrdhQJtRHfwwzGbZ8"
+        },
+        {
+          "name": "rw_user",
+          "value": "{\"email\":\"analyst1@ravenwatch.local\"}"
+        }
+      ]
+    }
+  ]
+}

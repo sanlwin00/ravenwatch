@@ -41,7 +41,11 @@ export default function DashboardPage() {
     try {
       const res = await articlesApi.list({ ...currentFilters, offset: currentOffset });
       const data = res.data;
-      const items: Article[] = Array.isArray(data) ? data : ((data as { items?: Article[] }).items ?? []);
+      const items: Article[] = Array.isArray(data)
+        ? data
+        : ((data as { articles?: Article[]; items?: Article[] }).articles
+            ?? (data as { items?: Article[] }).items
+            ?? []);
       const tot: number = Array.isArray(data) ? items.length : ((data as { total?: number }).total ?? items.length);
       setTotal(tot);
       setArticles(prev => append ? [...prev, ...items] : items);
@@ -83,22 +87,32 @@ export default function DashboardPage() {
 
   async function handleScrape() {
     setScraping(true);
+    showBanner('success', 'Scraping sources — results will appear below…');
     try {
-      const res = await scrapeApi.run();
-      const data = res.data as { status?: string; articles_inserted?: number; articles_tagged?: number; articles_translated?: number };
-      if (data.articles_inserted !== undefined) {
-        showBanner(
-          'success',
-          `Scrape complete — ${data.articles_inserted} new articles, ${data.articles_tagged ?? 0} entities matched, ${data.articles_translated ?? 0} translated`,
-        );
-      } else {
-        showBanner('success', 'Scrape started — new articles will appear shortly');
-      }
-      fetchArticles(filters, 0, false);
-      setOffset(0);
+      await scrapeApi.run();
+      // Poll every 5s for up to 90s waiting for articles to appear
+      const startCount = articles.length;
+      let waited = 0;
+      const poll = setInterval(async () => {
+        waited += 5;
+        await fetchArticles(filters, 0, false);
+        setOffset(0);
+        // Stop polling after 90s regardless
+        if (waited >= 90) {
+          clearInterval(poll);
+          setScraping(false);
+          showBanner('success', 'Scrape finished — check the feed above');
+        }
+      }, 5000);
+      // Also stop polling if we got new articles (checked on next tick via state)
+      setTimeout(() => {
+        if (articles.length > startCount) {
+          clearInterval(poll);
+          setScraping(false);
+        }
+      }, 6000);
     } catch {
       showBanner('error', 'Scrape failed — check server logs');
-    } finally {
       setScraping(false);
     }
   }

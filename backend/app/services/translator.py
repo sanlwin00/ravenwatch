@@ -47,7 +47,7 @@ async def translate_text(text: str, target_lang: str = "EN-US") -> str | None:
         "target_lang": target_lang,
         "source_lang": "ZH",
     }
-    headers = {"Authorization": f"DeepKey {api_key}"}
+    headers = {"Authorization": f"DeepL-Auth-Key {api_key}"}
 
     async def _post() -> httpx.Response:
         async with httpx.AsyncClient(timeout=30) as client:
