@@ -59,6 +59,7 @@ export interface Article {
   source: Source;
   published_at: string;
   raw_text_en?: string;
+  raw_text_original?: string;
   early_signal: boolean;
   policy_signal: boolean;
   entities: Entity[];

@@ -125,15 +125,20 @@ export default function ArticleDetailPage() {
             <div className="border-t my-5" style={{ borderColor: '#2a2d3a' }} />
 
             {/* Content */}
-            {article.raw_text_en ? (
+            {(article.raw_text_en || article.raw_text_original) ? (
               <div>
-                <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Content</h2>
+                <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                  Content
+                  {!article.raw_text_en && article.raw_text_original && (
+                    <span className="ml-2 normal-case font-normal text-slate-600">(original)</span>
+                  )}
+                </h2>
                 <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-                  {article.raw_text_en}
+                  {article.raw_text_en || article.raw_text_original}
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-slate-500 italic">No translated content available.</p>
+              <p className="text-sm text-slate-500 italic">Content not yet available.</p>
             )}
           </div>
         )}
