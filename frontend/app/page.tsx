@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { isAuthenticated } from '@/lib/auth';
-import { articlesApi, scrapeApi, sourcesApi, entitiesApi, getExportUrl } from '@/lib/api';
+import { articlesApi, scrapeApi, translateApi, sourcesApi, entitiesApi, getExportUrl } from '@/lib/api';
 import type { Article, Source, Entity, ArticleFilters } from '@/lib/api';
 import NavBar from '@/components/NavBar';
 import ArticleCard from '@/components/ArticleCard';
@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [scraping, setScraping] = useState(false);
+  const [translating, setTranslating] = useState(false);
   const [sources, setSources] = useState<Source[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
   const [filters, setFilters] = useState<ArticleFilters>({ limit: LIMIT, offset: 0 });
@@ -117,6 +118,20 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleTranslate() {
+    setTranslating(true);
+    showBanner('success', 'Translating articles — this may take a few minutes…');
+    try {
+      await translateApi.run();
+      await fetchArticles(filters, 0, false);
+      showBanner('success', 'Translation complete.');
+    } catch {
+      showBanner('error', 'Translation failed — check server logs');
+    } finally {
+      setTranslating(false);
+    }
+  }
+
   function handleExport() {
     const url = getExportUrl(filters);
     const a = document.createElement('a');
@@ -168,6 +183,15 @@ export default function DashboardPage() {
             >
               <Download size={14} />
               Export CSV
+            </button>
+            <button
+              onClick={handleTranslate}
+              disabled={translating}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm text-slate-300 hover:text-slate-100 disabled:opacity-50 transition-colors"
+              style={{ borderColor: '#2a2d3a' }}
+            >
+              <RefreshCw size={14} className={translating ? 'animate-spin' : ''} />
+              {translating ? 'Translating...' : 'Translate'}
             </button>
             <button
               onClick={handleScrape}

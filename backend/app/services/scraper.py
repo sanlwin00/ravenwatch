@@ -59,8 +59,12 @@ def _is_article_link(link: str, base_url: str) -> bool:
     if not link or link.startswith('#') or link.startswith('javascript') or link.startswith('mailto'):
         return False
 
-    # Must be same domain
-    if parsed.netloc and parsed.netloc != base.netloc:
+    # Must be same root domain (ignore subdomain differences like eng. vs www.)
+    def _root_domain(netloc: str) -> str:
+        parts = netloc.split('.')
+        return '.'.join(parts[-2:]) if len(parts) >= 2 else netloc
+
+    if parsed.netloc and _root_domain(parsed.netloc) != _root_domain(base.netloc):
         return False
 
     path = parsed.path.rstrip('/')
@@ -93,7 +97,7 @@ def _is_article_link(link: str, base_url: str) -> bool:
     has_numeric_id = bool(re.search(r'/\d{4,}', path))
     # Long slug: final segment looks like a real article title (contains letters, long enough)
     has_title_slug = (
-        len(segments) >= 3
+        len(segments) >= 2
         and len(last_segment) >= 10
         and re.search(r'[a-zA-Z一-鿿]', last_segment)
         and not last_segment.isdigit()

@@ -119,6 +119,10 @@ export const scrapeApi = {
   run: () => api.post('/api/v1/scrape'),
 };
 
+export const translateApi = {
+  run: () => api.post('/api/v1/translate'),
+};
+
 export const settingsApi = {
   get: () => api.get<Settings>('/api/v1/settings'),
   update: (data: Settings) => api.put<Settings>('/api/v1/settings', data),
