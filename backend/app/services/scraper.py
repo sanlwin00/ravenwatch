@@ -496,6 +496,16 @@ def _insert_article(db: Client, article: dict, retention_days: int) -> bool:
         logger.debug("Duplicate URL skipped: %s", url)
         return False
 
+    # Discard nav/section pages masquerading as articles
+    raw_text = article.get("raw_text") or ""
+    title = article.get("title") or ""
+    if len(raw_text.strip()) < 200:
+        logger.debug("Skipping short-body page (likely nav/section): %s", url)
+        return False
+    if "--" in title and (source.get("name", "") in title or "Online" in title):
+        logger.debug("Skipping nav-page title '%s': %s", title, url)
+        return False
+
     source_type = source.get("type", "")
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(days=retention_days)
