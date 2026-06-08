@@ -11,6 +11,7 @@ import TopicBadge from '@/components/TopicBadge';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
 export default function ArticleDetailPage() {
   const router = useRouter();
@@ -92,7 +93,7 @@ export default function ArticleDetailPage() {
                   className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300"
                 >
                   <ExternalLink size={13} />
-                  Original
+                  Source
                 </a>
               )}
             </div>
@@ -133,8 +134,15 @@ export default function ArticleDetailPage() {
                     <span className="ml-2 normal-case font-normal text-slate-600">(original)</span>
                   )}
                 </h2>
-                <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-                  {article.raw_text_en || article.raw_text_original}
+                <div className="prose prose-sm prose-invert max-w-none break-words overflow-hidden
+                  [&_a]:text-blue-400 [&_a]:underline [&_a]:break-all
+                  [&_p]:text-slate-300 [&_p]:leading-relaxed [&_p]:mb-3
+                  [&_h1]:text-slate-100 [&_h2]:text-slate-200 [&_h3]:text-slate-200
+                  [&_ul]:text-slate-300 [&_li]:mb-1
+                  [&_img]:hidden">
+                  <ReactMarkdown>
+                    {article.raw_text_en || article.raw_text_original || ''}
+                  </ReactMarkdown>
                 </div>
               </div>
             ) : (
