@@ -195,7 +195,7 @@ export default function DashboardPage() {
                 style={{ borderColor: '#2a2d3a' }}
               >
                 <Download size={14} />
-                <span className="hidden sm:inline">CSV</span>
+                <span>CSV</span>
               </button>
               <button
                 onClick={handleTranslate}
@@ -204,7 +204,7 @@ export default function DashboardPage() {
                 style={{ borderColor: '#2a2d3a' }}
               >
                 <Languages size={14} className={translating ? 'animate-spin' : ''} />
-                <span className="hidden sm:inline">{translating ? 'Translating...' : 'Translate'}</span>
+                <span>{translating ? 'Translating...' : 'Translate'}</span>
               </button>
               <button
                 onClick={handleScrape}
@@ -212,7 +212,7 @@ export default function DashboardPage() {
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
               >
                 <RefreshCw size={14} className={scraping ? 'animate-spin' : ''} />
-                <span className="hidden sm:inline">{scraping ? 'Scraping...' : 'Scrape'}</span>
+                <span>{scraping ? 'Scraping...' : 'Scrape'}</span>
               </button>
             </div>
           </div>
@@ -235,7 +235,7 @@ export default function DashboardPage() {
               style={{ borderColor: filtersOpen ? undefined : '#2a2d3a' }}
             >
               <SlidersHorizontal size={14} />
-              <span className="hidden sm:inline">Filters</span>
+              <span>Filters</span>
             </button>
             {/* Matched toggle — always visible */}
             <button
@@ -248,7 +248,7 @@ export default function DashboardPage() {
             >
               <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${matchedOnly ? 'translate-x-4' : 'translate-x-0'}`} />
             </button>
-            <span className="text-xs text-slate-500 hidden sm:inline shrink-0">Matched only</span>
+            <span className="text-xs text-slate-500 shrink-0">Matched only</span>
           </div>
         </div>
 
