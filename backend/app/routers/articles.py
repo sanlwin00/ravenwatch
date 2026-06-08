@@ -61,3 +61,13 @@ async def get_article_by_id(
     if article is None:
         raise HTTPException(status_code=404, detail="Article not found or expired")
     return article
+
+
+@router.delete("/{article_id}", status_code=204)
+async def delete_article(
+    article_id: str,
+    db: Client = Depends(get_db),
+):
+    result = db.table("articles").delete().eq("id", article_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Article not found")

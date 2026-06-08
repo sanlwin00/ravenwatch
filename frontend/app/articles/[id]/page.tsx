@@ -10,7 +10,7 @@ import EntityBadge from '@/components/EntityBadge';
 import TopicBadge from '@/components/TopicBadge';
 import Link from 'next/link';
 import { format } from 'date-fns';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 export default function ArticleDetailPage() {
@@ -20,6 +20,7 @@ export default function ArticleDetailPage() {
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -37,13 +38,36 @@ export default function ArticleDetailPage() {
       <NavBar />
 
       <main className="max-w-3xl mx-auto px-4 py-6">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200 mb-6"
-        >
-          <ArrowLeft size={14} />
-          Back to Dashboard
-        </Link>
+        <div className="flex items-center justify-between mb-6">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200"
+          >
+            <ArrowLeft size={14} />
+            Back
+          </Link>
+          {article && (
+            <button
+              onClick={async () => {
+                if (!confirm('Delete this article?')) return;
+                setDeleting(true);
+                try {
+                  await articlesApi.delete(article.id);
+                  router.replace('/');
+                } catch {
+                  alert('Delete failed.');
+                  setDeleting(false);
+                }
+              }}
+              disabled={deleting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm text-red-400 hover:text-red-300 hover:border-red-500/40 disabled:opacity-50 transition-colors"
+              style={{ borderColor: '#2a2d3a' }}
+            >
+              <Trash2 size={13} />
+              {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+          )}
+        </div>
 
         {loading && (
           <div className="text-center py-16 text-slate-500 text-sm">Loading article...</div>
