@@ -7,7 +7,7 @@ import { articlesApi, scrapeApi, translateApi, sourcesApi, entitiesApi, getExpor
 import type { Article, Source, Entity, ArticleFilters } from '@/lib/api';
 import NavBar from '@/components/NavBar';
 import ArticleCard from '@/components/ArticleCard';
-import { RefreshCw, Search, ChevronDown, Download, X } from 'lucide-react';
+import { RefreshCw, ChevronDown, Download, X, SlidersHorizontal } from 'lucide-react';
 
 const LIMIT = 25;
 
@@ -31,8 +31,10 @@ export default function DashboardPage() {
   const [filters, setFilters] = useState<ArticleFilters>({ limit: LIMIT, offset: 0, has_entities: true });
   const [search, setSearch] = useState('');
   const [matchedOnly, setMatchedOnly] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [banner, setBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -72,9 +74,13 @@ export default function DashboardPage() {
     }
   }, [filters, fetchArticles]);
 
-  function handleSearch(e: React.FormEvent) {
-    e.preventDefault();
-    setFilters(prev => ({ ...prev, search: search || undefined, offset: 0 }));
+  // Debounced search: fire 400ms after user stops typing
+  function handleSearchChange(value: string) {
+    setSearch(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setFilters(prev => ({ ...prev, search: value.trim() || undefined, offset: 0 }));
+    }, 400);
   }
 
   function handleLoadMore() {
@@ -176,146 +182,146 @@ export default function DashboardPage() {
         )}
 
         {/* Header */}
-        <div className="mb-5">
+        <div className="mb-4">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div>
               <h1 className="text-lg font-semibold text-slate-100">Article Feed</h1>
               <p className="text-sm text-slate-500">{total} articles</p>
             </div>
-            <button
-              onClick={handleExport}
-              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm text-slate-300 hover:text-slate-100 transition-colors"
-              style={{ borderColor: '#2a2d3a' }}
-            >
-              <Download size={14} />
-              <span className="hidden sm:inline">Export CSV</span>
-              <span className="sm:hidden">CSV</span>
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleExport}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-sm text-slate-300 hover:text-slate-100 transition-colors"
+                style={{ borderColor: '#2a2d3a' }}
+              >
+                <Download size={14} />
+                <span className="hidden sm:inline">CSV</span>
+              </button>
+              <button
+                onClick={handleTranslate}
+                disabled={translating}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-sm text-slate-300 hover:text-slate-100 disabled:opacity-50 transition-colors"
+                style={{ borderColor: '#2a2d3a' }}
+              >
+                <RefreshCw size={14} className={translating ? 'animate-spin' : ''} />
+                <span className="hidden sm:inline">{translating ? 'Translating...' : 'Translate'}</span>
+              </button>
+              <button
+                onClick={handleScrape}
+                disabled={scraping}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw size={14} className={scraping ? 'animate-spin' : ''} />
+                <span className="hidden sm:inline">{scraping ? 'Scraping...' : 'Scrape'}</span>
+              </button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleTranslate}
-              disabled={translating}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm text-slate-300 hover:text-slate-100 disabled:opacity-50 transition-colors"
-              style={{ borderColor: '#2a2d3a' }}
-            >
-              <RefreshCw size={14} className={translating ? 'animate-spin' : ''} />
-              {translating ? 'Translating...' : 'Translate'}
-            </button>
-            <button
-              onClick={handleScrape}
-              disabled={scraping}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
-            >
-              <RefreshCw size={14} className={scraping ? 'animate-spin' : ''} />
-              {scraping ? 'Scraping...' : 'Run Scrape'}
-            </button>
-          </div>
-        </div>
 
-        {/* Filters */}
-        <div
-          className="rounded-lg border p-4 mb-5 space-y-3"
-          style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}
-        >
-          {/* Search */}
-          <form onSubmit={handleSearch} className="flex gap-2">
+          {/* Always-visible search + controls row */}
+          <div className="flex items-center gap-2">
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Search articles..."
-              className="flex-1 rounded-lg border px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-blue-500"
-              style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a' }}
+              className="flex-1 rounded-lg border px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500"
+              style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}
             />
             <button
-              type="submit"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm text-slate-300 hover:text-slate-100 transition-colors"
-              style={{ borderColor: '#2a2d3a' }}
+              onClick={() => setFiltersOpen(o => !o)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm transition-colors shrink-0 ${
+                filtersOpen ? 'border-blue-500 text-blue-400' : 'text-slate-300 hover:text-slate-100'
+              }`}
+              style={{ borderColor: filtersOpen ? undefined : '#2a2d3a' }}
             >
-              <Search size={14} />
+              <SlidersHorizontal size={14} />
+              <span className="hidden sm:inline">Filters</span>
             </button>
-          </form>
-
-          {/* Filter dropdowns — 2-col grid on mobile, flex row on desktop */}
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-            <select
-              className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none col-span-2 sm:col-span-1"
-              style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
-              onChange={(e) => setFilters(prev => ({ ...prev, source_id: e.target.value ? Number(e.target.value) : undefined }))}
-            >
-              <option value="">All Sources</option>
-              {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-
-            <select
-              className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
-              style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
-              onChange={(e) => setFilters(prev => ({ ...prev, entity_id: e.target.value ? Number(e.target.value) : undefined }))}
-            >
-              <option value="">All Entities</option>
-              {entities.map(en => <option key={en.id} value={en.id}>{en.name}</option>)}
-            </select>
-
-            <select
-              className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
-              style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
-              onChange={(e) => {
-                const val = e.target.value ? Number(e.target.value) : undefined;
-                setFilters(prev => ({ ...prev, tier: val, has_entities: val !== undefined ? true : matchedOnly }));
-              }}
-            >
-              {TIER_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-
-            <select
-              className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
-              style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
-              onChange={(e) => setFilters(prev => ({ ...prev, topic: e.target.value || undefined }))}
-            >
-              <option value="">All Topics</option>
-              {['ceasefire', 'mediation', 'border_security', 'election', 'bri'].map(t => (
-                <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Date range */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <p className="text-xs text-slate-500 mb-1 px-1">From</p>
-              <input
-                type="date"
-                className="w-full rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
-                style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
-                onChange={(e) => setFilters(prev => ({ ...prev, from_date: e.target.value || undefined }))}
-              />
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 mb-1 px-1">To</p>
-              <input
-                type="date"
-                className="w-full rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
-                style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
-                onChange={(e) => setFilters(prev => ({ ...prev, to_date: e.target.value || undefined }))}
-              />
-            </div>
-          </div>
-
-          {/* Matched only toggle */}
-          <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
+            {/* Matched toggle — always visible */}
             <button
               type="button"
               role="switch"
               aria-checked={matchedOnly}
               onClick={() => handleMatchedToggle(!matchedOnly)}
-              className={`relative w-9 h-5 rounded-full transition-colors focus:outline-none ${matchedOnly ? 'bg-blue-600' : 'bg-slate-700'}`}
+              title={matchedOnly ? 'Showing matched articles only' : 'Showing all articles'}
+              className={`relative shrink-0 w-9 h-5 rounded-full transition-colors focus:outline-none ${matchedOnly ? 'bg-blue-600' : 'bg-slate-700'}`}
             >
               <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${matchedOnly ? 'translate-x-4' : 'translate-x-0'}`} />
             </button>
-            <span className="text-sm text-slate-400">Matched entities only</span>
-          </label>
+            <span className="text-xs text-slate-500 hidden sm:inline shrink-0">Matched only</span>
+          </div>
         </div>
+
+        {/* Collapsible filter panel */}
+        {filtersOpen && (
+          <div
+            className="rounded-lg border p-4 mb-4 space-y-3"
+            style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}
+          >
+            <div className="grid grid-cols-2 gap-2">
+              <select
+                className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none col-span-2 sm:col-span-1"
+                style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
+                onChange={(e) => setFilters(prev => ({ ...prev, source_id: e.target.value ? Number(e.target.value) : undefined }))}
+              >
+                <option value="">All Sources</option>
+                {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+
+              <select
+                className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
+                style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
+                onChange={(e) => setFilters(prev => ({ ...prev, entity_id: e.target.value ? Number(e.target.value) : undefined }))}
+              >
+                <option value="">All Entities</option>
+                {entities.map(en => <option key={en.id} value={en.id}>{en.name}</option>)}
+              </select>
+
+              <select
+                className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
+                style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
+                onChange={(e) => {
+                  const val = e.target.value ? Number(e.target.value) : undefined;
+                  setFilters(prev => ({ ...prev, tier: val, has_entities: val !== undefined ? true : matchedOnly }));
+                }}
+              >
+                {TIER_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+
+              <select
+                className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
+                style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
+                onChange={(e) => setFilters(prev => ({ ...prev, topic: e.target.value || undefined }))}
+              >
+                <option value="">All Topics</option>
+                {['ceasefire', 'mediation', 'border_security', 'election', 'bri'].map(t => (
+                  <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-xs text-slate-500 mb-1 px-1">From</p>
+                <input
+                  type="date"
+                  className="w-full rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
+                  style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
+                  onChange={(e) => setFilters(prev => ({ ...prev, from_date: e.target.value || undefined }))}
+                />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1 px-1">To</p>
+                <input
+                  type="date"
+                  className="w-full rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
+                  style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
+                  onChange={(e) => setFilters(prev => ({ ...prev, to_date: e.target.value || undefined }))}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Article list */}
         {loading && articles.length === 0 ? (
@@ -323,7 +329,7 @@ export default function DashboardPage() {
         ) : articles.length === 0 ? (
           <div className="text-center py-16 text-slate-500 text-sm">
             {matchedOnly
-              ? <>No matched articles yet. Run <strong>Translate</strong> to tag entities, or turn off <em>Matched entities only</em>.</>
+              ? <>No matched articles yet. Run <strong>Translate</strong> to tag entities, or turn off the matched toggle.</>
               : 'No articles found.'}
           </div>
         ) : (
@@ -334,7 +340,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Load more */}
         {hasMore && !loading && (
           <div className="mt-5 flex justify-center">
             <button
