@@ -191,20 +191,20 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={handleExport}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-sm text-slate-300 hover:text-slate-100 transition-colors"
+                title="Export CSV"
+                className="p-2 rounded-lg border text-slate-300 hover:text-slate-100 transition-colors"
                 style={{ borderColor: '#2a2d3a' }}
               >
                 <Download size={14} />
-                <span>CSV</span>
               </button>
               <button
                 onClick={handleTranslate}
                 disabled={translating}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-sm text-slate-300 hover:text-slate-100 disabled:opacity-50 transition-colors"
+                title="Translate pending articles"
+                className="p-2 rounded-lg border text-slate-300 hover:text-slate-100 disabled:opacity-50 transition-colors"
                 style={{ borderColor: '#2a2d3a' }}
               >
                 <Languages size={14} className={translating ? 'animate-spin' : ''} />
-                <span>{translating ? 'Translating...' : 'Translate'}</span>
               </button>
               <button
                 onClick={handleScrape}
@@ -217,8 +217,8 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Always-visible search + controls row */}
-          <div className="flex items-center gap-2">
+          {/* Search row */}
+          <div className="flex items-center gap-2 mb-2">
             <input
               type="text"
               value={search}
@@ -237,19 +237,20 @@ export default function DashboardPage() {
               <SlidersHorizontal size={14} />
               <span>Filters</span>
             </button>
-            {/* Matched toggle — always visible */}
+          </div>
+          {/* Matched only toggle — second line */}
+          <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
             <button
               type="button"
               role="switch"
               aria-checked={matchedOnly}
               onClick={() => handleMatchedToggle(!matchedOnly)}
-              title={matchedOnly ? 'Showing matched articles only' : 'Showing all articles'}
               className={`relative shrink-0 w-9 h-5 rounded-full transition-colors focus:outline-none ${matchedOnly ? 'bg-blue-600' : 'bg-slate-700'}`}
             >
               <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${matchedOnly ? 'translate-x-4' : 'translate-x-0'}`} />
             </button>
-            <span className="text-xs text-slate-500 shrink-0">Matched only</span>
-          </div>
+            <span className="text-sm text-slate-400">Matched entities only</span>
+          </label>
         </div>
 
         {/* Collapsible filter panel */}

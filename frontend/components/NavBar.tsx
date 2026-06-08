@@ -59,7 +59,6 @@ export default function NavBar() {
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-sm text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors shrink-0"
         >
           <LogOut size={15} />
-          <span className="text-xs">Logout</span>
         </button>
       </div>
     </nav>
