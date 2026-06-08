@@ -7,7 +7,7 @@ import { articlesApi, scrapeApi, translateApi, sourcesApi, entitiesApi, getExpor
 import type { Article, Source, Entity, ArticleFilters } from '@/lib/api';
 import NavBar from '@/components/NavBar';
 import ArticleCard from '@/components/ArticleCard';
-import { RefreshCw, ChevronDown, Download, X, SlidersHorizontal } from 'lucide-react';
+import { RefreshCw, ChevronDown, Download, X, SlidersHorizontal, Languages } from 'lucide-react';
 
 const LIMIT = 25;
 
@@ -203,7 +203,7 @@ export default function DashboardPage() {
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-sm text-slate-300 hover:text-slate-100 disabled:opacity-50 transition-colors"
                 style={{ borderColor: '#2a2d3a' }}
               >
-                <RefreshCw size={14} className={translating ? 'animate-spin' : ''} />
+                <Languages size={14} className={translating ? 'animate-spin' : ''} />
                 <span className="hidden sm:inline">{translating ? 'Translating...' : 'Translate'}</span>
               </button>
               <button
