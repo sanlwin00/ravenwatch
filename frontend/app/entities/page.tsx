@@ -133,65 +133,53 @@ export default function EntitiesPage() {
         ) : entities.length === 0 ? (
           <div className="text-center py-16 text-slate-500 text-sm">No entities yet.</div>
         ) : (
-          <div
-            className="rounded-xl border overflow-x-auto"
-            style={{ borderColor: '#2a2d3a' }}
-          >
-            <table className="w-full text-sm min-w-[560px]">
-              <thead>
-                <tr style={{ backgroundColor: '#1a1d27', borderBottom: '1px solid #2a2d3a' }}>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Chinese Name</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tier</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Aliases</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {entities.map((entity, i) => (
-                  <tr
-                    key={entity.id}
-                    style={{
-                      backgroundColor: i % 2 === 0 ? '#1a1d27' : '#191c26',
-                      borderBottom: '1px solid #2a2d3a'
-                    }}
-                  >
-                    <td className="px-4 py-3 text-slate-100 font-medium">{entity.name}</td>
-                    <td className="px-4 py-3 text-slate-400">{entity.name_zh || '—'}</td>
-                    <td className="px-4 py-3 text-slate-400 capitalize">{entity.type?.replace(/_/g, ' ')}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium ${
-                        entity.tier === 1
-                          ? 'bg-red-500/15 text-red-400 border-red-500/30'
-                          : entity.tier === 2
-                          ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                          : 'bg-blue-500/15 text-blue-400 border-blue-500/30'
-                      }`}>
-                        {entity.tier === 1 ? 'Critical' : entity.tier === 2 ? 'High' : 'Medium'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-500">{entity.aliases?.length ?? 0}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5 justify-end">
-                        <button
-                          onClick={() => openEdit(entity)}
-                          className="p-1.5 rounded text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-colors"
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(entity.id, entity.name)}
-                          className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-2">
+            {entities.map((entity) => (
+              <div
+                key={entity.id}
+                className="rounded-xl border px-4 py-3"
+                style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}
+              >
+                {/* Row 1: name + actions */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium text-slate-100">{entity.name}</span>
+                    {entity.name_zh && (
+                      <span className="ml-2 text-xs text-slate-500">{entity.name_zh}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => openEdit(entity)}
+                      className="p-1.5 rounded text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-colors"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(entity.id, entity.name)}
+                      className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+                {/* Row 2: type + tier badges */}
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className="text-xs px-1.5 py-0.5 rounded border border-slate-700 text-slate-500 capitalize">
+                    {entity.type?.replace(/_/g, ' ')}
+                  </span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${
+                    entity.tier === 1
+                      ? 'bg-red-500/15 text-red-400 border-red-500/30'
+                      : entity.tier === 2
+                      ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                      : 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                  }`}>
+                    {entity.tier === 1 ? 'Critical' : entity.tier === 2 ? 'High' : 'Medium'}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </main>
