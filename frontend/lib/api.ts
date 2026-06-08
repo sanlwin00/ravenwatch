@@ -85,6 +85,8 @@ export interface ArticleFilters {
   entity_id?: number;
   source_id?: number;
   topic?: string;
+  tier?: number;
+  has_entities?: boolean;
   from_date?: string;
   to_date?: string;
   search?: string;

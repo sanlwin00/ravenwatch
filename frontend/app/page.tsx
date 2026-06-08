@@ -11,6 +11,13 @@ import { RefreshCw, Search, ChevronDown, Download, X } from 'lucide-react';
 
 const LIMIT = 25;
 
+const TIER_OPTIONS = [
+  { value: '', label: 'All Priorities' },
+  { value: '1', label: 'Critical' },
+  { value: '2', label: 'High' },
+  { value: '3', label: 'Medium' },
+];
+
 export default function DashboardPage() {
   const router = useRouter();
   const [articles, setArticles] = useState<Article[]>([]);
@@ -21,8 +28,9 @@ export default function DashboardPage() {
   const [translating, setTranslating] = useState(false);
   const [sources, setSources] = useState<Source[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
-  const [filters, setFilters] = useState<ArticleFilters>({ limit: LIMIT, offset: 0 });
+  const [filters, setFilters] = useState<ArticleFilters>({ limit: LIMIT, offset: 0, has_entities: true });
   const [search, setSearch] = useState('');
+  const [matchedOnly, setMatchedOnly] = useState(true);
   const [banner, setBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -86,26 +94,28 @@ export default function DashboardPage() {
     setBanner(null);
   }
 
+  function handleMatchedToggle(checked: boolean) {
+    setMatchedOnly(checked);
+    setFilters(prev => ({ ...prev, has_entities: checked }));
+  }
+
   async function handleScrape() {
     setScraping(true);
     showBanner('success', 'Scraping sources — results will appear below…');
     try {
       await scrapeApi.run();
-      // Poll every 5s for up to 90s waiting for articles to appear
       const startCount = articles.length;
       let waited = 0;
       const poll = setInterval(async () => {
         waited += 5;
         await fetchArticles(filters, 0, false);
         setOffset(0);
-        // Stop polling after 90s regardless
         if (waited >= 90) {
           clearInterval(poll);
           setScraping(false);
           showBanner('success', 'Scrape finished — check the feed above');
         }
       }, 5000);
-      // Also stop polling if we got new articles (checked on next tick via state)
       setTimeout(() => {
         if (articles.length > startCount) {
           clearInterval(poll);
@@ -159,31 +169,30 @@ export default function DashboardPage() {
             }`}
           >
             <span>{banner.message}</span>
-            <button
-              onClick={dismissBanner}
-              className="shrink-0 opacity-70 hover:opacity-100 transition-opacity"
-              aria-label="Dismiss"
-            >
+            <button onClick={dismissBanner} className="shrink-0 opacity-70 hover:opacity-100 transition-opacity" aria-label="Dismiss">
               <X size={14} />
             </button>
           </div>
         )}
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-lg font-semibold text-slate-100">Article Feed</h1>
-            <p className="text-sm text-slate-500">{total} articles</p>
-          </div>
-          <div className="flex items-center gap-2">
+        <div className="mb-5">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <h1 className="text-lg font-semibold text-slate-100">Article Feed</h1>
+              <p className="text-sm text-slate-500">{total} articles</p>
+            </div>
             <button
               onClick={handleExport}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm text-slate-300 hover:text-slate-100 transition-colors"
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm text-slate-300 hover:text-slate-100 transition-colors"
               style={{ borderColor: '#2a2d3a' }}
             >
               <Download size={14} />
-              Export CSV
+              <span className="hidden sm:inline">Export CSV</span>
+              <span className="sm:hidden">CSV</span>
             </button>
+          </div>
+          <div className="flex gap-2">
             <button
               onClick={handleTranslate}
               disabled={translating}
@@ -209,6 +218,7 @@ export default function DashboardPage() {
           className="rounded-lg border p-4 mb-5 space-y-3"
           style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}
         >
+          {/* Search */}
           <form onSubmit={handleSearch} className="flex gap-2">
             <input
               type="text"
@@ -224,13 +234,13 @@ export default function DashboardPage() {
               style={{ borderColor: '#2a2d3a' }}
             >
               <Search size={14} />
-              Search
             </button>
           </form>
 
-          <div className="flex flex-wrap gap-2">
+          {/* Filter dropdowns — 2-col grid on mobile, flex row on desktop */}
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
             <select
-              className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
+              className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none col-span-2 sm:col-span-1"
               style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
               onChange={(e) => setFilters(prev => ({ ...prev, source_id: e.target.value ? Number(e.target.value) : undefined }))}
             >
@@ -250,6 +260,17 @@ export default function DashboardPage() {
             <select
               className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
               style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
+              onChange={(e) => {
+                const val = e.target.value ? Number(e.target.value) : undefined;
+                setFilters(prev => ({ ...prev, tier: val, has_entities: val !== undefined ? true : matchedOnly }));
+              }}
+            >
+              {TIER_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+
+            <select
+              className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
+              style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
               onChange={(e) => setFilters(prev => ({ ...prev, topic: e.target.value || undefined }))}
             >
               <option value="">All Topics</option>
@@ -257,27 +278,54 @@ export default function DashboardPage() {
                 <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
               ))}
             </select>
-
-            <input
-              type="date"
-              className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
-              style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
-              onChange={(e) => setFilters(prev => ({ ...prev, from_date: e.target.value || undefined }))}
-            />
-            <input
-              type="date"
-              className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
-              style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
-              onChange={(e) => setFilters(prev => ({ ...prev, to_date: e.target.value || undefined }))}
-            />
           </div>
+
+          {/* Date range */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-xs text-slate-500 mb-1 px-1">From</p>
+              <input
+                type="date"
+                className="w-full rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
+                style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
+                onChange={(e) => setFilters(prev => ({ ...prev, from_date: e.target.value || undefined }))}
+              />
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 mb-1 px-1">To</p>
+              <input
+                type="date"
+                className="w-full rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
+                style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
+                onChange={(e) => setFilters(prev => ({ ...prev, to_date: e.target.value || undefined }))}
+              />
+            </div>
+          </div>
+
+          {/* Matched only toggle */}
+          <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={matchedOnly}
+              onClick={() => handleMatchedToggle(!matchedOnly)}
+              className={`relative w-9 h-5 rounded-full transition-colors focus:outline-none ${matchedOnly ? 'bg-blue-600' : 'bg-slate-700'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${matchedOnly ? 'translate-x-4' : 'translate-x-0'}`} />
+            </button>
+            <span className="text-sm text-slate-400">Matched entities only</span>
+          </label>
         </div>
 
         {/* Article list */}
         {loading && articles.length === 0 ? (
           <div className="text-center py-16 text-slate-500 text-sm">Loading articles...</div>
         ) : articles.length === 0 ? (
-          <div className="text-center py-16 text-slate-500 text-sm">No articles found.</div>
+          <div className="text-center py-16 text-slate-500 text-sm">
+            {matchedOnly
+              ? <>No matched articles yet. Run <strong>Translate</strong> to tag entities, or turn off <em>Matched entities only</em>.</>
+              : 'No articles found.'}
+          </div>
         ) : (
           <div className="space-y-3">
             {articles.map(article => (

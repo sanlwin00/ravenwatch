@@ -21,6 +21,24 @@ def _apply_filters(query, source_id, from_date, to_date):
     return query
 
 
+async def _get_article_ids_with_entities(db: Client, tier: int | None = None) -> set[str]:
+    """Return article IDs that have at least one tagged entity, optionally filtered by tier."""
+    if tier is not None:
+        ent_res = db.table("entities").select("id").eq("tier", tier).execute()
+        entity_ids = [row["id"] for row in (ent_res.data or [])]
+        if not entity_ids:
+            return set()
+        ae_res = (
+            db.table("article_entities")
+            .select("article_id")
+            .in_("entity_id", entity_ids)
+            .execute()
+        )
+    else:
+        ae_res = db.table("article_entities").select("article_id").execute()
+    return {row["article_id"] for row in (ae_res.data or [])}
+
+
 async def _get_article_ids_for_entity(db: Client, entity_id: str) -> set[str]:
     res = (
         db.table("article_entities")
@@ -114,6 +132,8 @@ async def get_articles(
     entity_id: str | None = None,
     source_id: str | None = None,
     topic: str | None = None,
+    tier: int | None = None,
+    has_entities: bool = False,
     from_date: str | None = None,
     to_date: str | None = None,
     search: str | None = None,
@@ -124,6 +144,10 @@ async def get_articles(
 
     # Resolve join-based ID sets before main query
     filter_ids: set[str] | None = None
+
+    if has_entities or tier is not None:
+        ids = await _get_article_ids_with_entities(db, tier)
+        filter_ids = ids if filter_ids is None else filter_ids & ids
 
     if entity_id:
         ids = await _get_article_ids_for_entity(db, entity_id)
@@ -200,6 +224,8 @@ async def get_article_count(
     entity_id: str | None = None,
     source_id: str | None = None,
     topic: str | None = None,
+    tier: int | None = None,
+    has_entities: bool = False,
     from_date: str | None = None,
     to_date: str | None = None,
     search: str | None = None,
@@ -207,6 +233,10 @@ async def get_article_count(
     """Return total article count matching the given filters (for pagination)."""
 
     filter_ids: set[str] | None = None
+
+    if has_entities or tier is not None:
+        ids = await _get_article_ids_with_entities(db, tier)
+        filter_ids = ids if filter_ids is None else filter_ids & ids
 
     if entity_id:
         ids = await _get_article_ids_for_entity(db, entity_id)
