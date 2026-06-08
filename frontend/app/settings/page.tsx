@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isAuthenticated } from '@/lib/auth';
-import { settingsApi, sourcesApi, Source } from '@/lib/api';
+import { settingsApi, sourcesApi } from '@/lib/api';
+import type { Source } from '@/lib/api';
 import NavBar from '@/components/NavBar';
 import { Save, Check, X } from 'lucide-react';
 
@@ -106,16 +107,14 @@ export default function SettingsPage() {
         ) : (
           <div className="space-y-6">
             {/* General */}
-            <div className="rounded-xl border p-6" style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}>
+            <div className="rounded-xl border p-5" style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}>
               <h2 className="text-sm font-semibold text-slate-300 mb-4">General</h2>
               <form onSubmit={handleSave} className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1" htmlFor="retention">
                     Article Retention (days)
                   </label>
-                  <p className="text-xs text-slate-500 mb-3">
-                    Articles older than this many days will be removed. Range: 7–365.
-                  </p>
+                  <p className="text-xs text-slate-500 mb-2">Articles older than this many days will be removed. Range: 7–365.</p>
                   <input
                     id="retention"
                     type="number"
@@ -124,7 +123,7 @@ export default function SettingsPage() {
                     required
                     value={retentionDays}
                     onChange={(e) => setRetentionDays(Number(e.target.value))}
-                    className="w-40 rounded-lg border px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500"
+                    className="w-32 rounded-lg border px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500"
                     style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a' }}
                   />
                 </div>
@@ -133,9 +132,7 @@ export default function SettingsPage() {
                   <label className="block text-sm font-medium text-slate-300 mb-1" htmlFor="frequency">
                     Scraper Frequency (hours)
                   </label>
-                  <p className="text-xs text-slate-500 mb-3">
-                    How often the automatic scrape runs. Range: 1–168. Takes effect on next scheduled run.
-                  </p>
+                  <p className="text-xs text-slate-500 mb-2">How often the automatic scrape runs. Range: 1–168.</p>
                   <input
                     id="frequency"
                     type="number"
@@ -144,81 +141,86 @@ export default function SettingsPage() {
                     required
                     value={scraperFrequency}
                     onChange={(e) => setScraperFrequency(Number(e.target.value))}
-                    className="w-40 rounded-lg border px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500"
+                    className="w-32 rounded-lg border px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500"
                     style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a' }}
                   />
                 </div>
 
-                <div className="pt-1">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
-                  >
-                    <Save size={14} />
-                    {saving ? 'Saving...' : 'Save Settings'}
-                  </button>
-                </div>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
+                >
+                  <Save size={14} />
+                  {saving ? 'Saving...' : 'Save Settings'}
+                </button>
               </form>
             </div>
 
             {/* News Sources */}
-            <div className="rounded-xl border p-6" style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}>
+            <div className="rounded-xl border p-5" style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}>
               <h2 className="text-sm font-semibold text-slate-300 mb-1">News Sources</h2>
               <p className="text-xs text-slate-500 mb-4">
-                Edit the listing-page URL the scraper crawls. Toggle the checkmark to enable or disable a source.
+                Edit the URL the scraper crawls. Tap the toggle to enable/disable. URL changes save individually.
               </p>
 
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {sources.map((source) => {
                   const isDirty = sourceUrls[source.id] !== source.url;
                   const isSaving = savingSource === source.id;
                   return (
-                    <div key={source.id} className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleActive(source)}
-                        title={source.active ? 'Disable' : 'Enable'}
-                        className={`flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center border transition-colors ${
-                          source.active
-                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
-                            : 'bg-slate-800 border-slate-700 text-slate-600 hover:bg-slate-700'
-                        }`}
-                      >
-                        {source.active ? <Check size={11} /> : <X size={11} />}
-                      </button>
-
-                      <span className="w-40 flex-shrink-0 text-xs text-slate-300 truncate" title={source.name}>
-                        {source.name}
-                      </span>
-
-                      <span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded border border-slate-700 text-slate-500">
-                        {source.type}
-                      </span>
-
-                      <input
-                        type="url"
-                        value={sourceUrls[source.id] ?? ''}
-                        onChange={(e) =>
-                          setSourceUrls((prev) => ({ ...prev, [source.id]: e.target.value }))
-                        }
-                        className="flex-1 min-w-0 rounded-lg border px-2.5 py-1.5 text-xs text-slate-100 outline-none focus:border-blue-500 font-mono"
-                        style={{
-                          backgroundColor: '#0f1117',
-                          borderColor: isDirty ? '#3b82f6' : '#2a2d3a',
-                        }}
-                      />
-
-                      {isDirty && (
+                    <div
+                      key={source.id}
+                      className="rounded-lg border p-3 space-y-2"
+                      style={{ borderColor: '#2a2d3a', backgroundColor: '#0f1117' }}
+                    >
+                      {/* Row 1: toggle + name + type */}
+                      <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          disabled={isSaving}
-                          onClick={() => handleSourceSave(source)}
-                          className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-blue-600 text-xs text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
+                          onClick={() => handleToggleActive(source)}
+                          title={source.active ? 'Disable' : 'Enable'}
+                          className={`shrink-0 w-7 h-7 rounded-md flex items-center justify-center border transition-colors ${
+                            source.active
+                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
+                              : 'bg-slate-800 border-slate-700 text-slate-600 hover:bg-slate-700'
+                          }`}
                         >
-                          {isSaving ? '…' : 'Save'}
+                          {source.active ? <Check size={11} /> : <X size={11} />}
                         </button>
-                      )}
+                        <span className="flex-1 text-sm text-slate-200 truncate font-medium" title={source.name}>
+                          {source.name}
+                        </span>
+                        <span className="shrink-0 text-xs px-1.5 py-0.5 rounded border border-slate-700 text-slate-500">
+                          {source.type}
+                        </span>
+                      </div>
+
+                      {/* Row 2: URL + save button */}
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="url"
+                          value={sourceUrls[source.id] ?? ''}
+                          onChange={(e) =>
+                            setSourceUrls((prev) => ({ ...prev, [source.id]: e.target.value }))
+                          }
+                          className="flex-1 min-w-0 rounded-lg border px-2.5 py-1.5 text-xs text-slate-300 outline-none focus:border-blue-500 font-mono"
+                          style={{
+                            backgroundColor: '#1a1d27',
+                            borderColor: isDirty ? '#3b82f6' : '#2a2d3a',
+                          }}
+                        />
+                        {isDirty && (
+                          <button
+                            type="button"
+                            disabled={isSaving}
+                            onClick={() => handleSourceSave(source)}
+                            className="shrink-0 px-3 py-1.5 rounded-lg bg-blue-600 text-xs text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
+                          >
+                            {isSaving ? '…' : 'Save'}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

@@ -9,7 +9,7 @@ import NavBar from '@/components/NavBar';
 import { Plus, Pencil, Trash2, X } from 'lucide-react';
 
 const ENTITY_TYPES = ['person', 'organization', 'location', 'military_group', 'political_party', 'other'];
-const ENTITY_TIERS = [1, 2];
+const ENTITY_TIERS = [1, 2, 3];
 
 interface EntityFormData {
   name: string;
@@ -134,10 +134,10 @@ export default function EntitiesPage() {
           <div className="text-center py-16 text-slate-500 text-sm">No entities yet.</div>
         ) : (
           <div
-            className="rounded-xl border overflow-hidden"
+            className="rounded-xl border overflow-x-auto"
             style={{ borderColor: '#2a2d3a' }}
           >
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[560px]">
               <thead>
                 <tr style={{ backgroundColor: '#1a1d27', borderBottom: '1px solid #2a2d3a' }}>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
@@ -163,10 +163,12 @@ export default function EntitiesPage() {
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium ${
                         entity.tier === 1
-                          ? 'bg-blue-600/20 text-blue-400 border-blue-600/30'
-                          : 'bg-gray-600/20 text-gray-400 border-gray-600/30'
+                          ? 'bg-red-500/15 text-red-400 border-red-500/30'
+                          : entity.tier === 2
+                          ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                          : 'bg-blue-500/15 text-blue-400 border-blue-500/30'
                       }`}>
-                        T{entity.tier}
+                        {entity.tier === 1 ? 'Critical' : entity.tier === 2 ? 'High' : 'Medium'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-slate-500">{entity.aliases?.length ?? 0}</td>
@@ -268,9 +270,9 @@ export default function EntitiesPage() {
                     className="w-full rounded-lg border px-3 py-2 text-sm text-slate-300 outline-none"
                     style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
                   >
-                    {ENTITY_TIERS.map(t => (
-                      <option key={t} value={t}>Tier {t}</option>
-                    ))}
+                    <option value={1}>1 — Critical</option>
+                    <option value={2}>2 — High</option>
+                    <option value={3}>3 — Medium</option>
                   </select>
                 </div>
               </div>
