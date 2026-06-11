@@ -2,7 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 from supabase import Client
 
 from app.db import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_scrape_auth
 from app.services.scraper import scrape_all_sources
 from app.services.tagger import tag_pending_articles
 
@@ -14,7 +14,7 @@ async def _run_scrape(db: Client) -> None:
     await scrape_all_sources(db)
 
 
-@router.post("")
+@router.post("", dependencies=[Depends(require_scrape_auth)])
 async def trigger_scrape(
     background_tasks: BackgroundTasks,
     db: Client = Depends(get_db),
