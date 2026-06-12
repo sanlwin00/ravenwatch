@@ -552,21 +552,48 @@ def _update_last_scraped(db: Client, source_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _start_scrape_run(db: Client) -> str | None:
+    try:
+        result = db.table("scrape_runs").insert({"status": "running"}).execute()
+        return (result.data or [{}])[0].get("id")
+    except Exception as exc:
+        logger.warning("Could not create scrape_run record: %s", exc)
+        return None
+
+
+def _finish_scrape_run(db: Client, run_id: str | None, articles_added: int, error: str | None = None) -> None:
+    if not run_id:
+        return
+    try:
+        db.table("scrape_runs").update({
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "articles_added": articles_added,
+            "status": "error" if error else "success",
+            "error_message": error,
+        }).eq("id", run_id).execute()
+    except Exception as exc:
+        logger.warning("Could not update scrape_run record: %s", exc)
+
+
 async def scrape_all_sources(db: Client) -> dict:
     """
     Scrape all active sources.
     Returns a summary dict: {sources_attempted, articles_found, articles_inserted}.
     """
+    run_id = _start_scrape_run(db)
+
     # Load active sources
     try:
         result = db.table("sources").select("*").eq("active", True).execute()
         active_sources: list[dict] = result.data or []
     except Exception as exc:
         logger.error("Failed to load sources: %s", exc)
+        _finish_scrape_run(db, run_id, 0, str(exc))
         return {"error": str(exc), "sources_attempted": 0, "articles_found": 0, "articles_inserted": 0}
 
     if not active_sources:
         logger.warning("No active sources found — did you run seed_sources()?")
+        _finish_scrape_run(db, run_id, 0)
         return {"sources_attempted": 0, "articles_found": 0, "articles_inserted": 0}
 
     retention_days = _get_retention_days(db)
@@ -613,5 +640,7 @@ async def scrape_all_sources(db: Client) -> dict:
     # Send email notifications to all registered users
     email_result = await send_scrape_summary_email(db, summary)
     summary["emails_sent"] = email_result.get("sent", 0)
+
+    _finish_scrape_run(db, run_id, articles_inserted)
 
     return summary
