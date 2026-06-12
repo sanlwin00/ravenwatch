@@ -28,7 +28,7 @@ public class Worker(ILogger<Worker> logger, IHttpClientFactory httpClientFactory
         try
         {
             var client = httpClientFactory.CreateClient("RavenWatch");
-            var response = await client.GetFromJsonAsync<PlatformSettings>("/api/v1/settings/platform", ct);
+            var response = await client.GetFromJsonAsync<PlatformSettings>("/api/v1/scrape/frequency", ct);
             var hours = response?.ScraperFrequencyHours ?? 24;
             return Math.Max(1, hours);
         }

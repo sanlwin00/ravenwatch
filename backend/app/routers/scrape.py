@@ -3,6 +3,7 @@ from supabase import Client
 
 from app.db import get_db
 from app.dependencies import get_current_user, require_scrape_auth
+from app.services import settings_service
 from app.services.scraper import scrape_all_sources
 from app.services.tagger import tag_pending_articles
 
@@ -36,6 +37,17 @@ async def trigger_scrape(
         "status": "started",
         "message": f"Scrape initiated for {source_count} sources",
     }
+
+
+@router.get("/frequency", dependencies=[Depends(require_scrape_auth)])
+async def get_scrape_frequency(db: Client = Depends(get_db)):
+    """Returns the configured scraper frequency in hours. Accepts API key or Bearer token."""
+    value = await settings_service.get_setting(db, "scraper_frequency_hours")
+    try:
+        hours = float(value) if value is not None else 24.0
+    except (ValueError, TypeError):
+        hours = 24.0
+    return {"scraper_frequency_hours": max(1.0, hours)}
 
 
 @router.post("/tag", dependencies=[Depends(get_current_user)])
