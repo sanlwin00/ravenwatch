@@ -21,7 +21,7 @@ from app.routers import (
     translate,
 )
 
-_sentry_dsn = os.environ.get("SENTRY_DSN", "")
+_sentry_dsn = os.environ.get("SENTRY_DSN_BACKEND", "")
 if _sentry_dsn:
     sentry_sdk.init(
         dsn=_sentry_dsn,
