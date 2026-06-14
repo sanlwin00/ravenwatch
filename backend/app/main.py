@@ -28,6 +28,7 @@ if _sentry_dsn:
         integrations=[StarletteIntegration(), FastApiIntegration()],
         traces_sample_rate=0.2,
         send_default_pii=False,
+        server_name="ravenwatch-backend",
     )
 
 app = FastAPI(title="RavenWatch API")

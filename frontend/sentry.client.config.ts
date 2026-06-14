@@ -8,5 +8,6 @@ if (dsn) {
     tracesSampleRate: 0.2,
     replaysOnErrorSampleRate: 1.0,
     replaysSessionSampleRate: 0,
+    initialScope: { tags: { service: 'ravenwatch-frontend' } },
   });
 }

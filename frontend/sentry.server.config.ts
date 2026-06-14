@@ -6,5 +6,6 @@ if (dsn) {
   Sentry.init({
     dsn,
     tracesSampleRate: 0.2,
+    initialScope: { tags: { service: 'ravenwatch-frontend' } },
   });
 }

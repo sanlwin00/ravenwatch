@@ -10,6 +10,7 @@ if (!string.IsNullOrWhiteSpace(sentryDsn))
         o.Dsn = sentryDsn;
         o.TracesSampleRate = 0.2;
         o.MinimumEventLevel = Microsoft.Extensions.Logging.LogLevel.Error;
+        o.DefaultTags.Add("service", "ravenwatch-worker");
     });
 }
 
