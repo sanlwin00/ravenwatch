@@ -3,7 +3,7 @@ RavenWatch scraper service.
 
 Flow per source:
   1. Fetch the article listing page (source URL)
-  2. Extract individual article links (via Firecrawl links format, falling back to BS4)
+  2. Extract individual article links (BS4 primary; Firecrawl fallback for JS-heavy sites)
   3. Follow pagination up to 3 pages per source
   4. For each new (not yet in DB) article link, scrape full content
   5. Deduplicate against the articles table by URL
@@ -239,31 +239,22 @@ async def _extract_article_links(
 ) -> tuple[list[str], Optional[str]]:
     """
     Extract article links from a listing page.
-    Tries Firecrawl first for the link list; always uses BS4 for pagination detection.
+    BS4 is primary (free, handles pagination). Firecrawl is fallback for JS-heavy
+    sites where BS4 returns nothing.
     Returns (article_link_list, next_page_url_or_None).
     """
-    # Try Firecrawl for links
-    fc_links, _ = await _extract_article_links_firecrawl(listing_url, source)
-
-    # Always run BS4 to get both fallback links AND pagination
+    # BS4 first — handles most server-rendered sources and provides pagination
     bs4_links, next_page = await asyncio.to_thread(
         _extract_article_links_bs4_sync, listing_url, source
     )
 
-    # Merge: prefer Firecrawl links if we got them, supplement with BS4
-    if fc_links:
-        # Combine, dedup, cap
-        seen = set(fc_links)
-        combined = list(fc_links)
-        for link in bs4_links:
-            if link not in seen:
-                combined.append(link)
-                seen.add(link)
-        links = combined[:MAX_LINKS_PER_PAGE]
-    else:
-        links = bs4_links[:MAX_LINKS_PER_PAGE]
+    if bs4_links:
+        return bs4_links[:MAX_LINKS_PER_PAGE], next_page
 
-    return links, next_page
+    # BS4 got nothing — likely JS-rendered. Try Firecrawl as fallback.
+    logger.debug("BS4 found no links for %s — trying Firecrawl", listing_url)
+    fc_links, _ = await _extract_article_links_firecrawl(listing_url, source)
+    return fc_links[:MAX_LINKS_PER_PAGE], next_page
 
 
 # ---------------------------------------------------------------------------
@@ -376,10 +367,11 @@ async def _scrape_bs4(url: str) -> Optional[dict]:
 
 
 async def _fetch_article(url: str) -> Optional[dict]:
-    """Fetch a single article URL, trying Firecrawl first then BS4."""
-    result = await _scrape_firecrawl(url)
-    if result is None:
-        result = await _scrape_bs4(url)
+    """Fetch a single article URL. BS4 primary, Firecrawl fallback for JS-heavy pages."""
+    result = await _scrape_bs4(url)
+    if result is None or not (result.get("raw_text") or "").strip():
+        logger.debug("BS4 returned no content for %s — trying Firecrawl", url)
+        result = await _scrape_firecrawl(url)
     return result
 
 
