@@ -229,6 +229,9 @@ export default function SettingsPage() {
                     const start = new Date(run.started_at);
                     const end = run.finished_at ? new Date(run.finished_at) : null;
                     const durationSec = end ? Math.round((end.getTime() - start.getTime()) / 1000) : null;
+                    const durationFmt = durationSec === null ? null
+                      : durationSec < 60 ? `${durationSec}s`
+                      : `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`;
                     const dateStr = start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
                     const timeStr = start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
                     return (
@@ -241,8 +244,8 @@ export default function SettingsPage() {
                         <div className="flex items-center justify-between gap-2 mb-1.5">
                           <span className="text-xs text-slate-400 font-medium">{dateStr} · {timeStr}</span>
                           <div className="flex items-center gap-2 shrink-0">
-                            {durationSec !== null && (
-                              <span className="text-xs text-slate-600">{durationSec}s</span>
+                            {durationFmt !== null && (
+                              <span className="text-xs text-slate-600">{durationFmt}</span>
                             )}
                             <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${
                               run.status === 'success'
