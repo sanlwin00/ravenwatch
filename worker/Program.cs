@@ -30,8 +30,9 @@ builder.Services.AddHostedService<Worker>();
 var app = builder.Build();
 
 // IIS OutOfProcess requires an HTTP listener — minimal health endpoint
-var commit = typeof(Worker).Assembly
-    .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()
+var commit = System.Reflection.CustomAttributeExtensions
+    .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(
+        typeof(Worker).Assembly)
     ?.InformationalVersion ?? "unknown";
 
 app.MapGet("/", () => Results.Ok(new { status = "running", service = "ravenwatch-worker", commit }));
