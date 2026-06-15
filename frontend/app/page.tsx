@@ -74,12 +74,14 @@ export default function DashboardPage() {
     }
   }, [filters, fetchArticles]);
 
-  // Debounced search: fire 400ms after user stops typing
+  // Debounced search: fire 400ms after user stops typing; auto-open filter panel
   function handleSearchChange(value: string) {
     setSearch(value);
+    if (!filtersOpen) setFiltersOpen(true);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
-      setFilters(prev => ({ ...prev, search: value.trim() || undefined, offset: 0 }));
+      setFilters(prev => ({ ...prev, search: value.trim() || undefined }));
+      setOffset(0);
     }, 400);
   }
 
@@ -226,16 +228,20 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Search row */}
-          <div className="flex items-center gap-2 mb-2">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              placeholder="Search articles..."
-              className="flex-1 rounded-lg border px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500"
-              style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}
-            />
+          {/* Controls row: toggle + filters button */}
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={matchedOnly}
+                onClick={() => handleMatchedToggle(!matchedOnly)}
+                className={`relative shrink-0 w-9 h-5 rounded-full transition-colors focus:outline-none ${matchedOnly ? 'bg-blue-600' : 'bg-slate-700'}`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${matchedOnly ? 'translate-x-4' : 'translate-x-0'}`} />
+              </button>
+              <span className="text-sm text-slate-400">Matched articles only</span>
+            </label>
             <button
               onClick={() => setFiltersOpen(o => !o)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm transition-colors shrink-0 ${
@@ -247,19 +253,6 @@ export default function DashboardPage() {
               <span>Filters</span>
             </button>
           </div>
-          {/* Matched only toggle — second line */}
-          <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={matchedOnly}
-              onClick={() => handleMatchedToggle(!matchedOnly)}
-              className={`relative shrink-0 w-9 h-5 rounded-full transition-colors focus:outline-none ${matchedOnly ? 'bg-blue-600' : 'bg-slate-700'}`}
-            >
-              <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${matchedOnly ? 'translate-x-4' : 'translate-x-0'}`} />
-            </button>
-            <span className="text-sm text-slate-400">Matched entities only</span>
-          </label>
         </div>
 
         {/* Collapsible filter panel */}
@@ -268,6 +261,15 @@ export default function DashboardPage() {
             className="rounded-lg border p-4 mb-4 space-y-3"
             style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}
           >
+            {/* Search — first item in filter panel */}
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="Search articles..."
+              className="w-full rounded-lg border px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500"
+              style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a' }}
+            />
             <div className="grid grid-cols-2 gap-2">
               <select
                 className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none col-span-2 sm:col-span-1"
