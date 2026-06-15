@@ -1,0 +1,59 @@
+name: Deploy Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'worker/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish worker
+        run: |
+          dotnet publish worker/RavenWatch.Worker.csproj \
+            -c Release \
+            -r win-x64 \
+            --self-contained false \
+            -o ./publish
+
+      - name: Add web.config (OutOfProcess)
+        run: |
+          cat > ./publish/web.config << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <system.webServer>
+              <handlers>
+                <add name="aspNetCore" path="*" verb="*" modules="AspNetCoreModuleV2" resourceType="Unspecified"/>
+              </handlers>
+              <aspNetCore
+                processPath="dotnet"
+                arguments=".\RavenWatch.Worker.dll"
+                stdoutLogEnabled="false"
+                stdoutLogFile=".\logs\stdout"
+                hostingModel="OutOfProcess">
+                <environmentVariables>
+                  <environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Production"/>
+                </environmentVariables>
+              </aspNetCore>
+            </system.webServer>
+          </configuration>
+          EOF
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: win8072.site4now.net
+          username: raven-worker
+          password: ${{ secrets.FTP_WORKER_PASSWORD }}
+          local-dir: ./publish/
+          dangerous-clean-slate: false
