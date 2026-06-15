@@ -595,6 +595,16 @@ def _start_scrape_run(db: Client) -> str | None:
         return None
 
 
+def _checkpoint_scrape_run(db: Client, run_id: str | None, articles_added: int) -> None:
+    """Lightweight mid-run update so interrupted runs show partial counts."""
+    if not run_id:
+        return
+    try:
+        db.table("scrape_runs").update({"articles_added": articles_added}).eq("id", run_id).execute()
+    except Exception as exc:
+        logger.warning("Could not checkpoint scrape_run record: %s", exc)
+
+
 def _finish_scrape_run(
     db: Client,
     run_id: str | None,
@@ -665,6 +675,8 @@ async def scrape_all_sources(db: Client) -> dict:
 
         except Exception as exc:
             logger.error("Unhandled error scraping source %s: %s", source.get("name"), exc)
+
+        _checkpoint_scrape_run(db, run_id, articles_inserted)
 
     translation_summary: dict = {"translated": 0, "failed": 0}
     tagging_summary: dict = {"tagged": 0, "failed": 0}
