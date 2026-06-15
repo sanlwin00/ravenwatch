@@ -25,16 +25,26 @@ builder.Services.AddHttpClient("RavenWatch", client =>
     client.DefaultRequestHeaders.Add("X-API-Key", apiKey);
 });
 
+builder.Services.AddSingleton<WorkerState>();
 builder.Services.AddHostedService<Worker>();
 
 var app = builder.Build();
 
-// IIS OutOfProcess requires an HTTP listener — minimal health endpoint
 var commit = System.Reflection.CustomAttributeExtensions
     .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(
         typeof(Worker).Assembly)
     ?.InformationalVersion ?? "unknown";
 
-app.MapGet("/", () => Results.Ok(new { status = "running", service = "ravenwatch-worker", commit }));
+app.MapGet("/", (WorkerState state) => Results.Ok(new
+{
+    status = "running",
+    service = "ravenwatch-worker",
+    commit,
+    backend_reachable = state.BackendReachable,
+    last_backend_check = state.LastBackendCheck,
+    last_scrape_at = state.LastScrapeAt,
+    last_scrape_status = state.LastScrapeStatus,
+    next_scrape_at = state.NextScrapeAt,
+}));
 
 app.Run();

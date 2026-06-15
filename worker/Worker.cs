@@ -3,26 +3,45 @@ using System.Text.Json.Serialization;
 
 namespace RavenWatch.Worker;
 
-public class Worker(ILogger<Worker> logger, IHttpClientFactory httpClientFactory)
+public class Worker(ILogger<Worker> logger, IHttpClientFactory httpClientFactory, WorkerState state)
     : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         logger.LogInformation("RavenWatch scrape worker started.");
 
-        // Scrape immediately on startup, then respect the configured interval
-        await TriggerScrapeAsync(stoppingToken);
-
         while (!stoppingToken.IsCancellationRequested)
         {
             var intervalHours = await GetFrequencyHoursAsync(stoppingToken);
-            logger.LogInformation("Next scrape in {Hours}h.", intervalHours);
+            var lastRun = await GetLastScrapeTimeAsync(stoppingToken);
+            var now = DateTimeOffset.UtcNow;
 
-            using var timer = new PeriodicTimer(TimeSpan.FromHours(intervalHours));
-            if (!await timer.WaitForNextTickAsync(stoppingToken))
-                break;
+            double waitHours;
+            if (lastRun is null)
+            {
+                // Never run — scrape immediately
+                waitHours = 0;
+            }
+            else
+            {
+                var elapsed = now - lastRun.Value;
+                var remaining = TimeSpan.FromHours(intervalHours) - elapsed;
+                waitHours = remaining.TotalHours > 0 ? remaining.TotalHours : 0;
+            }
 
-            await TriggerScrapeAsync(stoppingToken);
+            if (waitHours > 0)
+            {
+                var nextAt = now.AddHours(waitHours);
+                state.NextScrapeAt = nextAt;
+                logger.LogInformation("Last scrape was recent — next scrape in {Hours:F1}h at {NextAt}.", waitHours, nextAt);
+                await Task.Delay(TimeSpan.FromHours(waitHours), stoppingToken);
+            }
+
+            if (!stoppingToken.IsCancellationRequested)
+            {
+                await TriggerScrapeAsync(stoppingToken);
+                state.NextScrapeAt = DateTimeOffset.UtcNow.AddHours(intervalHours);
+            }
         }
     }
 
@@ -32,14 +51,39 @@ public class Worker(ILogger<Worker> logger, IHttpClientFactory httpClientFactory
         {
             var client = httpClientFactory.CreateClient("RavenWatch");
             var response = await client.GetFromJsonAsync<PlatformSettings>("/api/v1/scrape/frequency", ct);
+            state.LastBackendCheck = DateTimeOffset.UtcNow;
+            state.BackendReachable = true;
             var hours = response?.ScraperFrequencyHours ?? 24;
             return Math.Max(1, hours);
         }
         catch (Exception ex)
         {
+            state.LastBackendCheck = DateTimeOffset.UtcNow;
+            state.BackendReachable = false;
             logger.LogWarning(ex, "Failed to fetch scraper frequency; defaulting to 24h.");
             return 24;
         }
+    }
+
+    private async Task<DateTimeOffset?> GetLastScrapeTimeAsync(CancellationToken ct)
+    {
+        try
+        {
+            var client = httpClientFactory.CreateClient("RavenWatch");
+            var runs = await client.GetFromJsonAsync<ScrapeRun[]>("/api/v1/scrape/runs", ct);
+            var last = runs?.FirstOrDefault();
+            if (last?.StartedAt is not null)
+            {
+                state.LastScrapeAt = last.StartedAt;
+                state.LastScrapeStatus = last.Status ?? "unknown";
+                return last.StartedAt;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to fetch last scrape run.");
+        }
+        return null;
     }
 
     private async Task TriggerScrapeAsync(CancellationToken ct)
@@ -49,10 +93,13 @@ public class Worker(ILogger<Worker> logger, IHttpClientFactory httpClientFactory
             var client = httpClientFactory.CreateClient("RavenWatch");
             var response = await client.PostAsync("/api/v1/scrape", null, ct);
             response.EnsureSuccessStatusCode();
-            logger.LogInformation("Scrape triggered successfully at {Time}.", DateTimeOffset.UtcNow);
+            state.LastScrapeAt = DateTimeOffset.UtcNow;
+            state.LastScrapeStatus = "triggered";
+            logger.LogInformation("Scrape triggered at {Time}.", DateTimeOffset.UtcNow);
         }
         catch (Exception ex)
         {
+            state.LastScrapeStatus = "failed";
             logger.LogError(ex, "Failed to trigger scrape.");
         }
     }
@@ -61,5 +108,14 @@ public class Worker(ILogger<Worker> logger, IHttpClientFactory httpClientFactory
     {
         [JsonPropertyName("scraper_frequency_hours")]
         public double ScraperFrequencyHours { get; init; }
+    }
+
+    private sealed class ScrapeRun
+    {
+        [JsonPropertyName("started_at")]
+        public DateTimeOffset? StartedAt { get; init; }
+
+        [JsonPropertyName("status")]
+        public string? Status { get; init; }
     }
 }
