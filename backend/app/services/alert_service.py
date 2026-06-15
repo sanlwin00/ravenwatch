@@ -3,6 +3,11 @@ RavenWatch alert service.
 
 Sends email notifications via the Resend API after each scrape run.
 If RESEND_API_KEY is not set, warnings are logged and emails are skipped silently.
+
+Alert rule engine (OSINT-15):
+  Critical — Deng Xijun co-mentioned with MNDAA/UWSA, or Chinese delegation in Lashio
+  High     — Deng Xijun statement/travel, or MFA "peace process"+"Myanmar"
+  Standard — any watchlist entity match
 """
 from __future__ import annotations
 
@@ -16,6 +21,24 @@ from supabase import Client
 logger = logging.getLogger(__name__)
 
 RESEND_ENDPOINT = "https://api.resend.com/emails"
+
+# ---------------------------------------------------------------------------
+# Alert rule definitions (matched against entity names, case-insensitive)
+# ---------------------------------------------------------------------------
+
+# Critical: Deng Xijun co-tagged with any MNDAA/UWSA entity in same article
+_CRITICAL_ENTITIES_PRIMARY = {"deng xijun", "邓锡军"}
+_CRITICAL_ENTITIES_SECONDARY = {"mndaa", "myanmar national democratic alliance army", "uwsa", "united wa state army", "wa state army"}
+# Critical phrase pair: both must appear in article text
+_CRITICAL_PHRASE_PAIRS: list[tuple[str, str]] = [
+    ("chinese delegation", "lashio"),
+]
+
+# High: Deng Xijun alone, or MFA + peace process + myanmar in text
+_HIGH_ENTITIES = {"deng xijun", "邓锡军", "mfa", "chinese foreign ministry", "ministry of foreign affairs"}
+_HIGH_PHRASE_PAIRS: list[tuple[str, str]] = [
+    ("peace process", "myanmar"),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -77,14 +100,22 @@ async def _send_via_resend(to_email: str, subject: str, html: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _log_alert(db: Client, subject: str, channel: str = "email", article_id=None) -> None:
+def _log_alert(
+    db: Client,
+    subject: str,
+    channel: str = "email",
+    article_id=None,
+    priority: str = "standard",
+    rule_name: str = "",
+) -> None:
     """Insert a row into alert_log. Skips silently on failure."""
     row: dict = {
-        "priority": "standard",
+        "priority": priority,
         "channel": channel,
         "sent_at": datetime.now(timezone.utc).isoformat(),
+        "title": subject,
+        "rule_name": rule_name,
     }
-    # article_id is nullable per the AlertLog model — include only if provided
     if article_id is not None:
         row["article_id"] = str(article_id)
 
@@ -92,6 +123,111 @@ def _log_alert(db: Client, subject: str, channel: str = "email", article_id=None
         db.table("alert_log").insert(row).execute()
     except Exception as exc:
         logger.warning("Failed to write alert_log entry: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# Rule engine — OSINT-15
+# ---------------------------------------------------------------------------
+
+
+def _entity_names_lower(entity_details: list[dict]) -> set[str]:
+    """Flatten entity name + name_zh + aliases to a lowercase set."""
+    names: set[str] = set()
+    for e in entity_details:
+        if e.get("name"):
+            names.add(e["name"].lower())
+        if e.get("name_zh"):
+            names.add(e["name_zh"].lower())
+        for alias in e.get("aliases") or []:
+            if isinstance(alias, str):
+                names.add(alias.lower())
+    return names
+
+
+def _check_critical(entity_names: set[str], text_lower: str) -> tuple[bool, str]:
+    """Returns (triggered, rule_name)."""
+    has_primary = bool(_CRITICAL_ENTITIES_PRIMARY & entity_names)
+    has_secondary = bool(_CRITICAL_ENTITIES_SECONDARY & entity_names)
+    if has_primary and has_secondary:
+        return True, "critical_entity_pair"
+    for phrase_a, phrase_b in _CRITICAL_PHRASE_PAIRS:
+        if phrase_a in text_lower and phrase_b in text_lower:
+            return True, "critical_phrase_pair"
+    return False, ""
+
+
+def _check_high(entity_names: set[str], text_lower: str) -> tuple[bool, str]:
+    """Returns (triggered, rule_name)."""
+    if _HIGH_ENTITIES & entity_names:
+        return True, "high_key_entity"
+    for phrase_a, phrase_b in _HIGH_PHRASE_PAIRS:
+        if phrase_a in text_lower and phrase_b in text_lower:
+            return True, "high_phrase_pair"
+    return False, ""
+
+
+async def evaluate_article_alerts(
+    db: Client,
+    article_id: str,
+    entity_ids: list[str],
+    article_text: str = "",
+) -> str | None:
+    """
+    Evaluate priority rules for a newly tagged article and write to alert_log.
+    Returns the priority that fired ('critical', 'high', 'standard') or None if no match.
+    Skips if an alert was already logged for this article.
+    """
+    if not entity_ids:
+        return None
+
+    # Dedup: skip if we already have an alert for this article
+    try:
+        existing = (
+            db.table("alert_log")
+            .select("id")
+            .eq("article_id", article_id)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            return None
+    except Exception as exc:
+        logger.warning("Could not check existing alerts for %s: %s", article_id, exc)
+
+    # Fetch full entity details for the matched IDs
+    entity_details: list[dict] = []
+    try:
+        res = db.table("entities").select("id, name, name_zh, aliases").in_("id", entity_ids).execute()
+        entity_details = res.data or []
+    except Exception as exc:
+        logger.warning("Could not fetch entity details for alert evaluation: %s", exc)
+
+    entity_names = _entity_names_lower(entity_details)
+    text_lower = article_text.lower()
+
+    # Evaluate tiers top-down — highest wins
+    triggered, rule_name = _check_critical(entity_names, text_lower)
+    if triggered:
+        priority = "critical"
+    else:
+        triggered, rule_name = _check_high(entity_names, text_lower)
+        priority = "high" if triggered else "standard"
+        if not triggered:
+            rule_name = "standard_entity_match"
+
+    # Fetch article title for the log entry
+    title = "Untitled article"
+    try:
+        art_res = db.table("articles").select("title").eq("id", article_id).maybe_single().execute()
+        if art_res.data and art_res.data.get("title"):
+            title = art_res.data["title"]
+    except Exception:
+        pass
+
+    alert_title = f"[{priority.upper()}] {title}"
+    _log_alert(db, subject=alert_title, channel="internal", article_id=article_id, priority=priority, rule_name=rule_name)
+    logger.info("Alert fired: article=%s priority=%s rule=%s", article_id, priority, rule_name)
+    return priority
 
 
 # ---------------------------------------------------------------------------

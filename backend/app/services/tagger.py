@@ -284,6 +284,14 @@ async def tag_article(article_id: str, db: Client, entities: list[dict] | None =
     # Update narrative metrics
     _update_narrative_metrics(db, raw_text_en)
 
+    # Evaluate alert rules for newly tagged article
+    if entity_ids:
+        try:
+            from app.services.alert_service import evaluate_article_alerts
+            await evaluate_article_alerts(db, article_id, entity_ids, article_text=raw_text_en)
+        except Exception as exc:
+            logger.warning("Alert evaluation failed for article %s: %s", article_id, exc)
+
     logger.info(
         "Tagged article %s — entities: %d, topics: %d",
         article_id,

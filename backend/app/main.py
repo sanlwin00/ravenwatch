@@ -19,6 +19,7 @@ from app.routers import (
     auth,
     narrative,
     translate,
+    alerts,
 )
 
 _sentry_dsn = os.environ.get("SENTRY_DSN_BACKEND", "")
@@ -69,6 +70,9 @@ app.include_router(
 )
 app.include_router(
     translate.router, prefix=PREFIX, dependencies=[Depends(get_current_user)]
+)
+app.include_router(
+    alerts.router, prefix=PREFIX, dependencies=[Depends(get_current_user)]
 )
 
 
