@@ -553,13 +553,26 @@ def _start_scrape_run(db: Client) -> str | None:
         return None
 
 
-def _finish_scrape_run(db: Client, run_id: str | None, articles_added: int, error: str | None = None) -> None:
+def _finish_scrape_run(
+    db: Client,
+    run_id: str | None,
+    articles_added: int,
+    articles_translated: int = 0,
+    articles_translation_failed: int = 0,
+    articles_tagged: int = 0,
+    articles_tagging_failed: int = 0,
+    error: str | None = None,
+) -> None:
     if not run_id:
         return
     try:
         db.table("scrape_runs").update({
             "finished_at": datetime.now(timezone.utc).isoformat(),
             "articles_added": articles_added,
+            "articles_translated": articles_translated,
+            "articles_translation_failed": articles_translation_failed,
+            "articles_tagged": articles_tagged,
+            "articles_tagging_failed": articles_tagging_failed,
             "status": "error" if error else "success",
             "error_message": error,
         }).eq("id", run_id).execute()
@@ -633,6 +646,14 @@ async def scrape_all_sources(db: Client) -> dict:
     email_result = await send_scrape_summary_email(db, summary)
     summary["emails_sent"] = email_result.get("sent", 0)
 
-    _finish_scrape_run(db, run_id, articles_inserted)
+    _finish_scrape_run(
+        db,
+        run_id,
+        articles_added=articles_inserted,
+        articles_translated=translation_summary.get("translated", 0),
+        articles_translation_failed=translation_summary.get("failed", 0),
+        articles_tagged=tagging_summary.get("tagged", 0),
+        articles_tagging_failed=tagging_summary.get("failed", 0),
+    )
 
     return summary
