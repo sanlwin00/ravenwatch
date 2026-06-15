@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import asyncio
+
 from supabase import Client
+
+# Fields needed for the article list view — excludes large text blobs
+LIST_COLUMNS = "id, source_id, title, url, published_at, scraped_at, language_original, is_early_signal, is_policy_signal"
 
 
 def _build_base_query(db: Client):
     """Return a base articles query with expiry filter applied."""
-    return db.table("articles").select("*").gt("expires_at", "now()")
+    return db.table("articles").select(LIST_COLUMNS).gt("expires_at", "now()")
 
 
 def _apply_filters(query, source_id, from_date, to_date):
@@ -127,22 +132,14 @@ async def _enrich_articles(db: Client, articles: list[dict]) -> list[dict]:
     return articles
 
 
-async def get_articles(
+async def resolve_filter_ids(
     db: Client,
     entity_id: str | None = None,
-    source_id: str | None = None,
     topic: str | None = None,
     tier: int | None = None,
     has_entities: bool = False,
-    from_date: str | None = None,
-    to_date: str | None = None,
-    search: str | None = None,
-    limit: int = 50,
-    offset: int = 0,
-) -> list[dict]:
-    """Query articles with optional filters. Returns enriched article dicts."""
-
-    # Resolve join-based ID sets before main query
+) -> set[str] | None:
+    """Compute the set of article IDs that satisfy join-based filters. Returns None if no filter applies."""
     filter_ids: set[str] | None = None
 
     if has_entities or tier is not None:
@@ -156,6 +153,21 @@ async def get_articles(
     if topic:
         ids = await _get_article_ids_for_topic(db, topic)
         filter_ids = ids if filter_ids is None else filter_ids & ids
+
+    return filter_ids
+
+
+async def get_articles(
+    db: Client,
+    source_id: str | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    search: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    filter_ids: set[str] | None = None,
+) -> list[dict]:
+    """Query articles with optional filters. Returns enriched article dicts."""
 
     # If filters produced no IDs, return early
     if filter_ids is not None and not filter_ids:
@@ -208,7 +220,7 @@ async def get_articles(
 async def get_article(db: Client, article_id: str) -> dict | None:
     """Get a single article by ID, enriched. Returns None if not found or expired."""
     res = (
-        _build_base_query(db)
+        db.table("articles").select("*").gt("expires_at", "now()")
         .eq("id", article_id)
         .maybe_single()
         .execute()
@@ -221,30 +233,13 @@ async def get_article(db: Client, article_id: str) -> dict | None:
 
 async def get_article_count(
     db: Client,
-    entity_id: str | None = None,
     source_id: str | None = None,
-    topic: str | None = None,
-    tier: int | None = None,
-    has_entities: bool = False,
     from_date: str | None = None,
     to_date: str | None = None,
     search: str | None = None,
+    filter_ids: set[str] | None = None,
 ) -> int:
     """Return total article count matching the given filters (for pagination)."""
-
-    filter_ids: set[str] | None = None
-
-    if has_entities or tier is not None:
-        ids = await _get_article_ids_with_entities(db, tier)
-        filter_ids = ids if filter_ids is None else filter_ids & ids
-
-    if entity_id:
-        ids = await _get_article_ids_for_entity(db, entity_id)
-        filter_ids = ids if filter_ids is None else filter_ids & ids
-
-    if topic:
-        ids = await _get_article_ids_for_topic(db, topic)
-        filter_ids = ids if filter_ids is None else filter_ids & ids
 
     if filter_ids is not None and not filter_ids:
         return 0

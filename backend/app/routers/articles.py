@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from supabase import Client
 
 from app.db import get_db
-from app.services.article_service import get_articles, get_article, get_article_count
+from app.services.article_service import get_articles, get_article, get_article_count, resolve_filter_ids
 
 router = APIRouter(prefix="/articles", tags=["articles"])
 
@@ -25,29 +26,28 @@ async def list_articles(
     offset: int = Query(default=0, ge=0),
     db: Client = Depends(get_db),
 ):
-    articles = await get_articles(
-        db,
-        entity_id=entity_id,
-        source_id=source_id,
-        topic=topic,
-        tier=tier,
-        has_entities=has_entities,
-        from_date=from_date,
-        to_date=to_date,
-        search=search,
-        limit=limit,
-        offset=offset,
-    )
-    total = await get_article_count(
-        db,
-        entity_id=entity_id,
-        source_id=source_id,
-        topic=topic,
-        tier=tier,
-        has_entities=has_entities,
-        from_date=from_date,
-        to_date=to_date,
-        search=search,
+    # Resolve join-based filter IDs once and share between articles + count queries
+    filter_ids = await resolve_filter_ids(db, entity_id=entity_id, topic=topic, tier=tier, has_entities=has_entities)
+
+    articles, total = await asyncio.gather(
+        get_articles(
+            db,
+            source_id=source_id,
+            from_date=from_date,
+            to_date=to_date,
+            search=search,
+            limit=limit,
+            offset=offset,
+            filter_ids=filter_ids,
+        ),
+        get_article_count(
+            db,
+            source_id=source_id,
+            from_date=from_date,
+            to_date=to_date,
+            search=search,
+            filter_ids=filter_ids,
+        ),
     )
     return {"articles": articles, "total": total, "limit": limit, "offset": offset}
 
