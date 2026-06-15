@@ -129,7 +129,7 @@ export interface ScrapeRun {
   articles_translation_failed?: number;
   articles_tagged?: number;
   articles_tagging_failed?: number;
-  status: 'success' | 'error' | 'running';
+  status: 'success' | 'error' | 'running' | 'interrupted';
   error_message?: string;
 }
 
