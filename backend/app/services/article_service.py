@@ -188,8 +188,8 @@ async def get_articles(
                 seen.add(row["id"])
                 merged.append(row)
 
-        # Sort merged by scraped_at DESC, then paginate manually
-        merged.sort(key=lambda r: r.get("scraped_at") or "", reverse=True)
+        # Sort by published_at DESC (nulls last), fall back to scraped_at
+        merged.sort(key=lambda r: (r.get("published_at") or r.get("scraped_at") or ""), reverse=True)
         page = merged[offset: offset + limit]
         return await _enrich_articles(db, page)
 
@@ -199,7 +199,7 @@ async def get_articles(
     if filter_ids is not None:
         query = query.in_("id", list(filter_ids))
 
-    query = query.order("scraped_at", desc=True).range(offset, offset + limit - 1)
+    query = query.order("published_at", desc=True, nullsfirst=False).order("scraped_at", desc=True).range(offset, offset + limit - 1)
     res = query.execute()
     rows = res.data or []
     return await _enrich_articles(db, rows)

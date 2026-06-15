@@ -116,7 +116,7 @@ export default function EntitiesPage() {
       <main className="max-w-5xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-lg font-semibold text-slate-100">Entity Watchlist</h1>
+            <h1 className="text-lg font-semibold text-slate-100">Watchlist</h1>
             <p className="text-sm text-slate-500">{entities.length} entities tracked</p>
           </div>
           <button

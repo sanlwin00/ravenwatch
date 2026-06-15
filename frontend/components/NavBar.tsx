@@ -15,8 +15,8 @@ export default function NavBar() {
   }
 
   const links = [
-    { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/entities', label: 'Entities', icon: Users },
+    { href: '/', label: 'Feed', icon: LayoutDashboard },
+    { href: '/entities', label: 'Watchlist', icon: Users },
     { href: '/settings', label: 'Settings', icon: Settings },
   ];
 

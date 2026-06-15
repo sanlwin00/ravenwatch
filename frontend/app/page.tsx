@@ -185,10 +185,19 @@ export default function DashboardPage() {
         <div className="mb-4">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div>
-              <h1 className="text-lg font-semibold text-slate-100">Article Feed</h1>
+              <h1 className="text-lg font-semibold text-slate-100">Feed</h1>
               <p className="text-sm text-slate-500">{total} articles</p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => { fetchArticles(filters, 0, false); setOffset(0); }}
+                disabled={loading}
+                title="Refresh feed"
+                className="p-2 rounded-lg border text-slate-300 hover:text-slate-100 disabled:opacity-50 transition-colors"
+                style={{ borderColor: '#2a2d3a' }}
+              >
+                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              </button>
               <button
                 onClick={handleExport}
                 title="Export CSV"
