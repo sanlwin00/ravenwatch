@@ -1,39 +1,36 @@
 """
-RavenWatch translation service — DeepL integration.
+RavenWatch translation service — OpenAI GPT-4o-mini.
 
-Translates Chinese-language article text to English using the DeepL free tier.
-DeepL free tier limit: 500K chars/month (~30 articles/day is well within bounds).
+Translates Chinese-language article text to English.
+GPT-4o-mini: ~$0.15/1M input tokens, $0.60/1M output tokens.
+At ~30 articles/day this runs ~$0.50–0.80/month.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 
-import httpx
+from openai import AsyncOpenAI
 from supabase import Client
 
 logger = logging.getLogger(__name__)
 
-DEEPL_API_URL = "https://api-free.deepl.com/v2/translate"
-MAX_CHARS = 50_000  # DeepL safe limit per request; truncate beyond this
+MAX_CHARS = 50_000
 TRUNCATION_NOTE = "\n\n[Translation truncated: original text exceeded 50,000 characters]"
-RATE_LIMIT_WAIT = 2  # seconds to wait before retry on 429
 
 
 async def translate_text(text: str, target_lang: str = "EN-US") -> str | None:
     """
-    Translate text to English using DeepL API.
+    Translate text to English using GPT-4o-mini.
     Returns translated text or None on failure.
-    Skips translation if DeepL detects the source is already English.
+    Skips translation if text appears to already be English.
     Truncates text that exceeds MAX_CHARS rather than failing.
     """
-    api_key = os.environ.get("DEEPL_API_KEY", "")
+    api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
-        logger.warning("DEEPL_API_KEY not set — skipping translation")
+        logger.warning("OPENAI_API_KEY not set — skipping translation")
         return None
 
-    # Truncate oversized text
     if len(text) > MAX_CHARS:
         logger.warning(
             "Text length %d exceeds %d chars — truncating before translation",
@@ -42,48 +39,32 @@ async def translate_text(text: str, target_lang: str = "EN-US") -> str | None:
         )
         text = text[:MAX_CHARS] + TRUNCATION_NOTE
 
-    payload = {
-        "text": [text],
-        "target_lang": target_lang,
-        "source_lang": "ZH",
-    }
-    headers = {"Authorization": f"DeepL-Auth-Key {api_key}"}
-
-    async def _post() -> httpx.Response:
-        async with httpx.AsyncClient(timeout=30) as client:
-            return await client.post(DEEPL_API_URL, headers=headers, json=payload)
-
     try:
-        resp = await _post()
-
-        # Rate limit — wait and retry once
-        if resp.status_code == 429:
-            logger.warning("DeepL rate limit hit — waiting %ds before retry", RATE_LIMIT_WAIT)
-            await asyncio.sleep(RATE_LIMIT_WAIT)
-            resp = await _post()
-
-        if resp.status_code != 200:
-            logger.error("DeepL API returned %s: %s", resp.status_code, resp.text)
+        client = AsyncOpenAI(api_key=api_key)
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a professional translator specializing in Chinese–English translation "
+                        "for geopolitical and news content. Translate the following Chinese text to English. "
+                        "Preserve proper nouns, entity names, and technical terms accurately. "
+                        "Return only the translated text with no commentary."
+                    ),
+                },
+                {"role": "user", "content": text},
+            ],
+            temperature=0.1,
+        )
+        translated = response.choices[0].message.content
+        if not translated:
+            logger.error("OpenAI returned empty translation")
             return None
-
-        data = resp.json()
-        translations = data.get("translations", [])
-        if not translations:
-            logger.error("DeepL returned empty translations list")
-            return None
-
-        translation = translations[0]
-        detected_lang = translation.get("detected_source_language", "").upper()
-
-        # Skip if source is already English
-        if detected_lang.startswith("EN"):
-            logger.info("Source language detected as English — skipping translation")
-            return None
-
-        return translation.get("text")
+        return translated.strip()
 
     except Exception as exc:
-        logger.error("DeepL translation exception: %s", exc)
+        logger.error("OpenAI translation exception: %s", exc)
         return None
 
 
@@ -109,7 +90,6 @@ async def translate_article(article_id: str, db: Client) -> bool:
         logger.warning("Article %s not found", article_id)
         return False
 
-    # Skip English-language sources
     if (article.get("language_original") or "").lower() == "en":
         logger.debug("Article %s is already English — skipping", article_id)
         return False
@@ -137,9 +117,9 @@ async def translate_pending_articles(db: Client) -> dict:
     Find all articles where raw_text_en IS NULL and raw_text_original IS NOT NULL.
     Translates each one. Returns {"translated": N, "failed": N, "skipped": N}.
     """
-    api_key = os.environ.get("DEEPL_API_KEY", "")
+    api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
-        logger.warning("DEEPL_API_KEY not set — skipping batch translation")
+        logger.warning("OPENAI_API_KEY not set — skipping batch translation")
         return {"translated": 0, "failed": 0, "skipped": 0}
 
     try:
@@ -162,7 +142,6 @@ async def translate_pending_articles(db: Client) -> dict:
     for article in pending:
         article_id = str(article["id"])
 
-        # English articles: copy raw_text_original → raw_text_en so tagger can run
         if (article.get("language_original") or "").lower() == "en":
             try:
                 orig = db.table("articles").select("raw_text_original").eq("id", article_id).single().execute()
