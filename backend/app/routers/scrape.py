@@ -50,9 +50,9 @@ async def get_scrape_frequency(db: Client = Depends(get_db)):
     return {"scraper_frequency_hours": max(1.0, hours)}
 
 
-@router.get("/runs", dependencies=[Depends(get_current_user)])
+@router.get("/runs", dependencies=[Depends(require_scrape_auth)])
 async def get_scrape_runs(db: Client = Depends(get_db)):
-    """Returns the last 10 scrape run records."""
+    """Returns the last 10 scrape run records. Accepts API key or Bearer token."""
     result = db.table("scrape_runs").select("*").order("started_at", desc=True).limit(10).execute()
     return result.data or []
 

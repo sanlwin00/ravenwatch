@@ -666,36 +666,39 @@ async def scrape_all_sources(db: Client) -> dict:
         except Exception as exc:
             logger.error("Unhandled error scraping source %s: %s", source.get("name"), exc)
 
-    # Translate any newly inserted (and previously untranslated) articles
-    translation_summary = await translate_pending_articles(db)
-    articles_translated = translation_summary.get("translated", 0)
+    translation_summary: dict = {"translated": 0, "failed": 0}
+    tagging_summary: dict = {"tagged": 0, "failed": 0}
+    finish_error: str | None = None
 
-    # Tag translated articles with entities and topics
-    tagging_summary = await tag_pending_articles(db)
-    articles_tagged = tagging_summary.get("tagged", 0)
+    try:
+        translation_summary = await translate_pending_articles(db)
+        tagging_summary = await tag_pending_articles(db)
+    except Exception as exc:
+        finish_error = str(exc)
+        logger.error("Pipeline error during translate/tag: %s", exc)
+    finally:
+        _finish_scrape_run(
+            db,
+            run_id,
+            articles_added=articles_inserted,
+            articles_translated=translation_summary.get("translated", 0),
+            articles_translation_failed=translation_summary.get("failed", 0),
+            articles_tagged=tagging_summary.get("tagged", 0),
+            articles_tagging_failed=tagging_summary.get("failed", 0),
+            error=finish_error,
+        )
 
     summary = {
         "sources_attempted": sources_attempted,
         "articles_found": articles_found,
         "articles_inserted": articles_inserted,
-        "articles_translated": articles_translated,
-        "articles_tagged": articles_tagged,
+        "articles_translated": translation_summary.get("translated", 0),
+        "articles_tagged": tagging_summary.get("tagged", 0),
         "retention_days": retention_days,
     }
     logger.info("Scrape complete: %s", summary)
 
-    # Send email notifications to all registered users
     email_result = await send_scrape_summary_email(db, summary)
     summary["emails_sent"] = email_result.get("sent", 0)
-
-    _finish_scrape_run(
-        db,
-        run_id,
-        articles_added=articles_inserted,
-        articles_translated=translation_summary.get("translated", 0),
-        articles_translation_failed=translation_summary.get("failed", 0),
-        articles_tagged=tagging_summary.get("tagged", 0),
-        articles_tagging_failed=tagging_summary.get("failed", 0),
-    )
 
     return summary
