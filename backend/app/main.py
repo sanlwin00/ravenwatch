@@ -1,10 +1,13 @@
 import os
 
+import logging
+
 import sentry_sdk
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 
 from app.dependencies import get_current_user
@@ -26,7 +29,11 @@ _sentry_dsn = os.environ.get("SENTRY_DSN_BACKEND", "")
 if _sentry_dsn:
     sentry_sdk.init(
         dsn=_sentry_dsn,
-        integrations=[StarletteIntegration(), FastApiIntegration()],
+        integrations=[
+            StarletteIntegration(),
+            FastApiIntegration(),
+            LoggingIntegration(level=logging.WARNING, event_level=logging.ERROR),
+        ],
         traces_sample_rate=0.2,
         send_default_pii=False,
         server_name="ravenwatch-backend",

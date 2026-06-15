@@ -190,7 +190,7 @@ async def _extract_article_links_firecrawl(
         return article_links, None
 
     except Exception as exc:
-        logger.warning("Firecrawl links exception for %s: %s", listing_url, exc)
+        logger.error("Firecrawl links exception for %s: %s", listing_url, exc)
         return [], None
 
 
@@ -205,7 +205,7 @@ def _extract_article_links_bs4_sync(
         resp = requests.get(listing_url, timeout=BS4_TIMEOUT, headers=BS4_HEADERS)
         resp.raise_for_status()
     except Exception as exc:
-        logger.warning("BS4 listing request failed for %s: %s", listing_url, exc)
+        logger.error("BS4 listing request failed for %s: %s", listing_url, exc)
         return [], None
 
     try:
@@ -462,7 +462,7 @@ async def scrape_source(source: dict, db: Client) -> list[dict]:
             break
 
     if not all_article_urls:
-        logger.warning("No article links extracted for source %s — no articles to scrape", name)
+        logger.error("No article links extracted for source %s — no articles to scrape", name)
         return []
 
     # Dedup against DB and cap total new articles
