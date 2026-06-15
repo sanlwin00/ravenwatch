@@ -24,6 +24,7 @@ jobs:
             -c Release \
             -r win-x64 \
             --self-contained false \
+            -p:InformationalVersion="${{ github.sha }}" \
             -o ./publish
 
       - name: Add web.config (OutOfProcess)
