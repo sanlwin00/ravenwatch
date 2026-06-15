@@ -1,6 +1,6 @@
 using RavenWatch.Worker;
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
 var sentryDsn = builder.Configuration["SENTRY_DSN_WORKER"] ?? Environment.GetEnvironmentVariable("SENTRY_DSN_WORKER");
 if (!string.IsNullOrWhiteSpace(sentryDsn))
@@ -27,5 +27,9 @@ builder.Services.AddHttpClient("RavenWatch", client =>
 
 builder.Services.AddHostedService<Worker>();
 
-var host = builder.Build();
-host.Run();
+var app = builder.Build();
+
+// IIS OutOfProcess requires an HTTP listener — minimal health endpoint
+app.MapGet("/", () => Results.Ok(new { status = "running", service = "ravenwatch-worker" }));
+
+app.Run();
