@@ -10,6 +10,9 @@ public class Worker(ILogger<Worker> logger, IHttpClientFactory httpClientFactory
     {
         logger.LogInformation("RavenWatch scrape worker started.");
 
+        // Scrape immediately on startup, then respect the configured interval
+        await TriggerScrapeAsync(stoppingToken);
+
         while (!stoppingToken.IsCancellationRequested)
         {
             var intervalHours = await GetFrequencyHoursAsync(stoppingToken);
