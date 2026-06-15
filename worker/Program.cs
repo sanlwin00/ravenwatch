@@ -30,21 +30,32 @@ builder.Services.AddHostedService<Worker>();
 
 var app = builder.Build();
 
-var commit = System.Reflection.CustomAttributeExtensions
+// Shorten commit: strip MSBuild-appended duplicate after '+', take first 7 chars
+var rawCommit = System.Reflection.CustomAttributeExtensions
     .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(
         typeof(Worker).Assembly)
     ?.InformationalVersion ?? "unknown";
+var shortCommit = rawCommit.Split('+')[0];
+if (shortCommit.Length > 7) shortCommit = shortCommit[..7];
+
+// Toronto timezone (Eastern) — Windows uses "Eastern Standard Time"
+var torontoTz = TimeZoneInfo.FindSystemTimeZoneById(
+    OperatingSystem.IsWindows() ? "Eastern Standard Time" : "America/Toronto");
+
+static string? ToToronto(DateTimeOffset? dt, TimeZoneInfo tz) =>
+    dt is null ? null : TimeZoneInfo.ConvertTime(dt.Value, tz).ToString("yyyy-MM-dd HH:mm:ss zzz");
 
 app.MapGet("/", (WorkerState state) => Results.Ok(new
 {
     status = "running",
     service = "ravenwatch-worker",
-    commit,
+    commit = shortCommit,
     backend_reachable = state.BackendReachable,
-    last_backend_check = state.LastBackendCheck,
-    last_scrape_at = state.LastScrapeAt,
+    last_backend_check = ToToronto(state.LastBackendCheck, torontoTz),
+    last_scrape_at = ToToronto(state.LastScrapeAt, torontoTz),
     last_scrape_status = state.LastScrapeStatus,
-    next_scrape_at = state.NextScrapeAt,
+    next_scrape_at = ToToronto(state.NextScrapeAt, torontoTz),
+    timezone = "America/Toronto (EDT/EST)",
 }));
 
 app.Run();
