@@ -3,10 +3,19 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isAuthenticated } from '@/lib/auth';
-import { settingsApi, sourcesApi } from '@/lib/api';
-import type { Source } from '@/lib/api';
+import { settingsApi, sourcesApi, scrapeApi } from '@/lib/api';
+import type { Source, ScrapeRun } from '@/lib/api';
 import NavBar from '@/components/NavBar';
-import { Save, Check, X } from 'lucide-react';
+import { Save, Check, X, RefreshCw } from 'lucide-react';
+
+function Stat({ label, value, warn }: { label: string; value: number; warn?: number }) {
+  return (
+    <span className="text-xs text-slate-500">
+      <span className="text-slate-300 font-medium">{value}</span> {label}
+      {warn ? <span className="text-red-400 ml-1">({warn} failed)</span> : null}
+    </span>
+  );
+}
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -19,6 +28,8 @@ export default function SettingsPage() {
   const [sources, setSources] = useState<Source[]>([]);
   const [sourceUrls, setSourceUrls] = useState<Record<string, string>>({});
   const [savingSource, setSavingSource] = useState<string | null>(null);
+  const [scrapeRuns, setScrapeRuns] = useState<ScrapeRun[]>([]);
+  const [runsLoading, setRunsLoading] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -38,7 +49,16 @@ export default function SettingsPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    loadRuns();
   }, [router]);
+
+  function loadRuns() {
+    setRunsLoading(true);
+    scrapeApi.runs()
+      .then(res => setScrapeRuns(res.data))
+      .catch(() => {})
+      .finally(() => setRunsLoading(false));
+  }
 
   function showToast(type: 'success' | 'error', msg: string) {
     setToast({ type, msg });
@@ -155,6 +175,79 @@ export default function SettingsPage() {
                   {saving ? 'Saving...' : 'Save Settings'}
                 </button>
               </form>
+            </div>
+
+            {/* Scrape History */}
+            <div className="rounded-xl border p-5" style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}>
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="text-sm font-semibold text-slate-300">Scrape History</h2>
+                <button
+                  onClick={loadRuns}
+                  disabled={runsLoading}
+                  className="p-1.5 rounded text-slate-500 hover:text-slate-300 disabled:opacity-40 transition-colors"
+                  title="Refresh"
+                >
+                  <RefreshCw size={13} className={runsLoading ? 'animate-spin' : ''} />
+                </button>
+              </div>
+              <p className="text-xs text-slate-500 mb-4">Last 10 scrape runs.</p>
+
+              {runsLoading && scrapeRuns.length === 0 ? (
+                <p className="text-xs text-slate-500 py-4 text-center">Loading...</p>
+              ) : scrapeRuns.length === 0 ? (
+                <p className="text-xs text-slate-500 py-4 text-center">No runs yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {scrapeRuns.map((run) => {
+                    const start = new Date(run.started_at);
+                    const end = run.finished_at ? new Date(run.finished_at) : null;
+                    const durationSec = end ? Math.round((end.getTime() - start.getTime()) / 1000) : null;
+                    const dateStr = start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                    const timeStr = start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                    return (
+                      <div
+                        key={run.id}
+                        className="rounded-lg border px-3 py-2.5"
+                        style={{ borderColor: '#2a2d3a', backgroundColor: '#0f1117' }}
+                      >
+                        {/* Row 1: date/time + status + duration */}
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <span className="text-xs text-slate-400 font-medium">{dateStr} · {timeStr}</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {durationSec !== null && (
+                              <span className="text-xs text-slate-600">{durationSec}s</span>
+                            )}
+                            <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${
+                              run.status === 'success'
+                                ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400'
+                                : run.status === 'running'
+                                ? 'bg-blue-500/10 border-blue-500/25 text-blue-400'
+                                : 'bg-red-500/10 border-red-500/25 text-red-400'
+                            }`}>
+                              {run.status}
+                            </span>
+                          </div>
+                        </div>
+                        {/* Row 2: pipeline stats */}
+                        <div className="flex flex-wrap gap-x-3 gap-y-1">
+                          <Stat label="added" value={run.articles_added} />
+                          {run.articles_translated !== undefined && (
+                            <Stat label="translated" value={run.articles_translated} warn={run.articles_translation_failed} />
+                          )}
+                          {run.articles_tagged !== undefined && (
+                            <Stat label="tagged" value={run.articles_tagged} warn={run.articles_tagging_failed} />
+                          )}
+                        </div>
+                        {run.error_message && (
+                          <p className="mt-1.5 text-xs text-red-400 truncate" title={run.error_message}>
+                            {run.error_message}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* News Sources */}

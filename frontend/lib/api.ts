@@ -120,8 +120,22 @@ export const sourcesApi = {
     api.put<Source>(`/api/v1/sources/${id}`, { url, active }),
 };
 
+export interface ScrapeRun {
+  id: string;
+  started_at: string;
+  finished_at?: string;
+  articles_added: number;
+  articles_translated?: number;
+  articles_translation_failed?: number;
+  articles_tagged?: number;
+  articles_tagging_failed?: number;
+  status: 'success' | 'error' | 'running';
+  error_message?: string;
+}
+
 export const scrapeApi = {
   run: () => api.post('/api/v1/scrape'),
+  runs: () => api.get<ScrapeRun[]>('/api/v1/scrape/runs'),
 };
 
 export const translateApi = {
