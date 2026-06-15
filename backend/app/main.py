@@ -1,6 +1,7 @@
-import os
-
 import logging
+import os
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 import sentry_sdk
 from fastapi import Depends, FastAPI, Request
@@ -10,6 +11,7 @@ from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 
+from app.db import get_db
 from app.dependencies import get_current_user
 from app.routers import (
     health,
@@ -39,7 +41,31 @@ if _sentry_dsn:
         server_name="ravenwatch-backend",
     )
 
-app = FastAPI(title="RavenWatch API")
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # On startup: close any scrape runs left open by a previous deployment
+    try:
+        db = next(get_db())
+        now = datetime.now(timezone.utc).isoformat()
+        result = (
+            db.table("scrape_runs")
+            .update({"status": "interrupted", "finished_at": now, "error_message": "Process restarted (redeployment)"})
+            .eq("status", "running")
+            .is_("finished_at", "null")
+            .execute()
+        )
+        rows = result.data or []
+        if rows:
+            logger.warning("Closed %d interrupted scrape run(s) on startup.", len(rows))
+    except Exception as exc:
+        logger.error("Failed to clean up interrupted scrape runs on startup: %s", exc)
+    yield
+
+
+app = FastAPI(title="RavenWatch API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

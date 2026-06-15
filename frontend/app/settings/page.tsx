@@ -264,6 +264,8 @@ export default function SettingsPage() {
                                 ? isStale
                                   ? 'bg-amber-500/10 border-amber-500/25 text-amber-400'
                                   : 'bg-blue-500/10 border-blue-500/25 text-blue-400'
+                                : run.status === 'interrupted'
+                                ? 'bg-slate-500/10 border-slate-500/25 text-slate-400'
                                 : 'bg-red-500/10 border-red-500/25 text-red-400'
                             }`}>
                               {run.status}
