@@ -211,9 +211,13 @@ async def get_articles(
     if filter_ids is not None:
         query = query.in_("id", list(filter_ids))
 
-    query = query.order("published_at", desc=True, nullsfirst=False).order("scraped_at", desc=True).range(offset, offset + limit - 1)
+    # Primary DB sort by scraped_at (always set) for correct cross-page ordering.
+    # Re-sort in Python by effective date (published_at ?? scraped_at) for correct
+    # within-page order when published_at is present on some articles but not others.
+    query = query.order("scraped_at", desc=True).range(offset, offset + limit - 1)
     res = query.execute()
     rows = res.data or []
+    rows.sort(key=lambda r: (r.get("published_at") or r.get("scraped_at") or ""), reverse=True)
     return await _enrich_articles(db, rows)
 
 
