@@ -250,16 +250,16 @@ async def get_article_count(
 
     if search:
         # Must materialise results to count after dedup (same logic as get_articles)
-        title_q = _build_base_query(db)
+        title_q = db.table("articles").select("id").gt("expires_at", "now()")
         title_q = _apply_filters(title_q, source_id, from_date, to_date)
-        title_q = title_q.ilike("title", f"%{search}%").select("id")
+        title_q = title_q.ilike("title", f"%{search}%")
         if filter_ids is not None:
             title_q = title_q.in_("id", list(filter_ids))
         title_res = title_q.execute()
 
-        body_q = _build_base_query(db)
+        body_q = db.table("articles").select("id").gt("expires_at", "now()")
         body_q = _apply_filters(body_q, source_id, from_date, to_date)
-        body_q = body_q.ilike("raw_text_en", f"%{search}%").select("id")
+        body_q = body_q.ilike("raw_text_en", f"%{search}%")
         if filter_ids is not None:
             body_q = body_q.in_("id", list(filter_ids))
         body_res = body_q.execute()

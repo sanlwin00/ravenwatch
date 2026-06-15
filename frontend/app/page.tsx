@@ -240,7 +240,7 @@ export default function DashboardPage() {
               >
                 <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${matchedOnly ? 'translate-x-4' : 'translate-x-0'}`} />
               </button>
-              <span className="text-sm text-slate-400">Matched articles only</span>
+              <span className="text-sm text-slate-400">Matched only</span>
             </label>
             <button
               onClick={() => setFiltersOpen(o => !o)}
