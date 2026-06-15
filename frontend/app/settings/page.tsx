@@ -234,16 +234,26 @@ export default function SettingsPage() {
                       : `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`;
                     const dateStr = start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
                     const timeStr = start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                    const elapsedMin = run.status === 'running'
+                      ? Math.floor((Date.now() - start.getTime()) / 60000)
+                      : null;
+                    const isStale = elapsedMin !== null && elapsedMin >= 15;
                     return (
                       <div
                         key={run.id}
                         className="rounded-lg border px-3 py-2.5"
-                        style={{ borderColor: '#2a2d3a', backgroundColor: '#0f1117' }}
+                        style={{ borderColor: isStale ? '#f59e0b44' : '#2a2d3a', backgroundColor: '#0f1117' }}
                       >
                         {/* Row 1: date/time + status + duration */}
                         <div className="flex items-center justify-between gap-2 mb-1.5">
                           <span className="text-xs text-slate-400 font-medium">{dateStr} · {timeStr}</span>
                           <div className="flex items-center gap-2 shrink-0">
+                            {elapsedMin !== null && (
+                              <span className={`text-xs ${isStale ? 'text-amber-400' : 'text-slate-500'}`}>
+                                {elapsedMin < 1 ? '< 1m elapsed' : `${elapsedMin}m elapsed`}
+                                {isStale && ' ⚠'}
+                              </span>
+                            )}
                             {durationFmt !== null && (
                               <span className="text-xs text-slate-600">{durationFmt}</span>
                             )}
@@ -251,7 +261,9 @@ export default function SettingsPage() {
                               run.status === 'success'
                                 ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400'
                                 : run.status === 'running'
-                                ? 'bg-blue-500/10 border-blue-500/25 text-blue-400'
+                                ? isStale
+                                  ? 'bg-amber-500/10 border-amber-500/25 text-amber-400'
+                                  : 'bg-blue-500/10 border-blue-500/25 text-blue-400'
                                 : 'bg-red-500/10 border-red-500/25 text-red-400'
                             }`}>
                               {run.status}
