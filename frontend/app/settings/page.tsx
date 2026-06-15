@@ -3,10 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isAuthenticated } from '@/lib/auth';
-import { settingsApi, sourcesApi, scrapeApi } from '@/lib/api';
+import { settingsApi, sourcesApi, scrapeApi, translateApi } from '@/lib/api';
 import type { Source, ScrapeRun } from '@/lib/api';
 import NavBar from '@/components/NavBar';
-import { Save, Check, X, RefreshCw } from 'lucide-react';
+import { Save, Check, X, RefreshCw, Languages } from 'lucide-react';
 
 function Stat({ label, value, warn }: { label: string; value: number; warn?: number }) {
   return (
@@ -30,6 +30,7 @@ export default function SettingsPage() {
   const [savingSource, setSavingSource] = useState<string | null>(null);
   const [scrapeRuns, setScrapeRuns] = useState<ScrapeRun[]>([]);
   const [runsLoading, setRunsLoading] = useState(false);
+  const [translating, setTranslating] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -51,6 +52,20 @@ export default function SettingsPage() {
       .finally(() => setLoading(false));
     loadRuns();
   }, [router]);
+
+  async function handleTranslate() {
+    setTranslating(true);
+    showToast('success', 'Translating articles — this may take a few minutes…');
+    try {
+      await translateApi.run();
+      showToast('success', 'Translation complete.');
+      loadRuns();
+    } catch {
+      showToast('error', 'Translation failed — check server logs');
+    } finally {
+      setTranslating(false);
+    }
+  }
 
   function loadRuns() {
     setRunsLoading(true);
@@ -181,14 +196,26 @@ export default function SettingsPage() {
             <div className="rounded-xl border p-5" style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}>
               <div className="flex items-center justify-between mb-1">
                 <h2 className="text-sm font-semibold text-slate-300">Scrape History</h2>
-                <button
-                  onClick={loadRuns}
-                  disabled={runsLoading}
-                  className="p-1.5 rounded text-slate-500 hover:text-slate-300 disabled:opacity-40 transition-colors"
-                  title="Refresh"
-                >
-                  <RefreshCw size={13} className={runsLoading ? 'animate-spin' : ''} />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleTranslate}
+                    disabled={translating}
+                    title="Translate pending articles"
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs text-slate-300 hover:text-slate-100 disabled:opacity-40 transition-colors"
+                    style={{ borderColor: '#2a2d3a' }}
+                  >
+                    <Languages size={13} className={translating ? 'animate-spin' : ''} />
+                    {translating ? 'Translating…' : 'Translate'}
+                  </button>
+                  <button
+                    onClick={loadRuns}
+                    disabled={runsLoading}
+                    className="p-1.5 rounded text-slate-500 hover:text-slate-300 disabled:opacity-40 transition-colors"
+                    title="Refresh runs"
+                  >
+                    <RefreshCw size={13} className={runsLoading ? 'animate-spin' : ''} />
+                  </button>
+                </div>
               </div>
               <p className="text-xs text-slate-500 mb-4">Last 10 scrape runs.</p>
 
