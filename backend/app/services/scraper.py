@@ -349,11 +349,53 @@ def _scrape_bs4_sync(url: str) -> Optional[dict]:
         )
         raw_text = body_el.get_text(separator="\n", strip=True) if body_el else ""
 
+        # Published date — check meta tags, JSON-LD, then <time> elements
+        published_at: Optional[datetime] = None
+        date_candidates = [
+            soup.find("meta", attrs={"property": "article:published_time"}),
+            soup.find("meta", attrs={"name": "pubdate"}),
+            soup.find("meta", attrs={"name": "publishdate"}),
+            soup.find("meta", attrs={"name": "date"}),
+            soup.find("meta", attrs={"itemprop": "datePublished"}),
+            soup.find("meta", attrs={"property": "og:article:published_time"}),
+        ]
+        for meta in date_candidates:
+            if meta and meta.get("content"):
+                try:
+                    published_at = datetime.fromisoformat(meta["content"].replace("Z", "+00:00"))
+                    break
+                except ValueError:
+                    pass
+
+        if not published_at:
+            # Try JSON-LD
+            for script in soup.find_all("script", type="application/ld+json"):
+                try:
+                    import json as _json
+                    ld = _json.loads(script.string or "")
+                    if isinstance(ld, list):
+                        ld = ld[0] if ld else {}
+                    raw_date = ld.get("datePublished") or ld.get("dateCreated")
+                    if raw_date:
+                        published_at = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+                        break
+                except Exception:
+                    pass
+
+        if not published_at:
+            # Try <time datetime="...">
+            time_tag = soup.find("time", attrs={"datetime": True})
+            if time_tag:
+                try:
+                    published_at = datetime.fromisoformat(time_tag["datetime"].replace("Z", "+00:00"))
+                except (ValueError, KeyError):
+                    pass
+
         return {
             "title": title,
             "url": url,
             "raw_text": raw_text,
-            "published_at": None,
+            "published_at": published_at,
         }
 
     except Exception as exc:
