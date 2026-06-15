@@ -70,7 +70,18 @@ public class Worker(ILogger<Worker> logger, IHttpClientFactory httpClientFactory
         try
         {
             var client = httpClientFactory.CreateClient("RavenWatch");
-            var runs = await client.GetFromJsonAsync<ScrapeRun[]>("/api/v1/scrape/runs", ct);
+            var response = await client.GetAsync("/api/v1/scrape/runs", ct);
+
+            // If auth fails, assume a recent scrape to avoid a tight loop
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                logger.LogWarning("Cannot check scrape history (auth error {Code}) — assuming recent run to avoid loop.", response.StatusCode);
+                return DateTimeOffset.UtcNow;
+            }
+
+            response.EnsureSuccessStatusCode();
+            var runs = await response.Content.ReadFromJsonAsync<ScrapeRun[]>(cancellationToken: ct);
             var last = runs?.FirstOrDefault();
             if (last?.StartedAt is not null)
             {
@@ -81,7 +92,9 @@ public class Worker(ILogger<Worker> logger, IHttpClientFactory httpClientFactory
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to fetch last scrape run.");
+            logger.LogWarning(ex, "Failed to fetch last scrape run — assuming recent run to avoid loop.");
+            // Return now so the worker waits a full interval before trying again
+            return DateTimeOffset.UtcNow;
         }
         return null;
     }
