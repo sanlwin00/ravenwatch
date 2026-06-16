@@ -114,8 +114,9 @@ async def translate_article(article_id: str, db: Client) -> bool:
 
 async def translate_pending_articles(db: Client) -> dict:
     """
-    Find all articles where raw_text_en IS NULL and raw_text_original IS NOT NULL.
-    Translates each one. Returns {"translated": N, "failed": N, "skipped": N}.
+    Find all articles with translation_status='pending' and translate them.
+    Marks each article 'done' or 'failed' in translation_status.
+    Returns {"translated": N, "failed": N, "skipped": N}.
     """
     api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
@@ -125,9 +126,8 @@ async def translate_pending_articles(db: Client) -> dict:
     try:
         result = (
             db.table("articles")
-            .select("id, language_original")
-            .is_("raw_text_en", "null")
-            .not_.is_("raw_text_original", "null")
+            .select("id, language_original, raw_text_original")
+            .eq("translation_status", "pending")
             .execute()
         )
         pending = result.data or []
@@ -143,23 +143,29 @@ async def translate_pending_articles(db: Client) -> dict:
         article_id = str(article["id"])
 
         if (article.get("language_original") or "").lower() == "en":
-            try:
-                orig = db.table("articles").select("raw_text_original").eq("id", article_id).single().execute()
-                raw_original = (orig.data or {}).get("raw_text_original") or ""
-                if raw_original:
-                    db.table("articles").update({"raw_text_en": raw_original}).eq("id", article_id).execute()
+            raw_original = article.get("raw_text_original") or ""
+            if raw_original:
+                try:
+                    db.table("articles").update({
+                        "raw_text_en": raw_original,
+                        "translation_status": "done",
+                    }).eq("id", article_id).execute()
                     translated += 1
-                else:
-                    skipped += 1
-            except Exception as exc:
-                logger.warning("Failed to copy raw_text_original for English article %s: %s", article_id, exc)
+                except Exception as exc:
+                    logger.warning("Failed to copy raw_text_original for English article %s: %s", article_id, exc)
+                    db.table("articles").update({"translation_status": "failed"}).eq("id", article_id).execute()
+                    failed += 1
+            else:
+                db.table("articles").update({"translation_status": "failed"}).eq("id", article_id).execute()
                 skipped += 1
             continue
 
         success = await translate_article(article_id, db)
         if success:
+            db.table("articles").update({"translation_status": "done"}).eq("id", article_id).execute()
             translated += 1
         else:
+            db.table("articles").update({"translation_status": "failed"}).eq("id", article_id).execute()
             failed += 1
 
     summary = {"translated": translated, "failed": failed, "skipped": skipped}

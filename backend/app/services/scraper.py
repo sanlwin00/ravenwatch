@@ -549,18 +549,21 @@ def _insert_article(db: Client, article: dict, retention_days: int) -> bool:
     if isinstance(published_at, datetime):
         published_at_iso = published_at.isoformat()
 
+    lang = source.get("language", "zh")
     row = {
         "source_id": source.get("id"),
         "title": article.get("title") or f"[{source.get('name', 'Unknown')}] {now.strftime('%Y-%m-%d')}",
         "url": url,
         "published_at": published_at_iso,
         "raw_text_original": article.get("raw_text") or None,
-        "raw_text_en": None,  # translation is OSINT-03
-        "language_original": source.get("language", "zh"),
+        "raw_text_en": None,
+        "language_original": lang,
         "scraped_at": now.isoformat(),
         "expires_at": expires_at.isoformat(),
         "is_early_signal": source_type == "yunnan",
         "is_policy_signal": source_type == "thinktank",
+        "translation_status": "done" if lang.lower() == "en" else "pending",
+        "tagging_status": "pending",
     }
 
     try:

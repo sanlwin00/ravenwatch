@@ -3,10 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isAuthenticated } from '@/lib/auth';
-import { settingsApi, sourcesApi, scrapeApi, translateApi } from '@/lib/api';
-import type { Source, ScrapeRun } from '@/lib/api';
+import { settingsApi, sourcesApi, scrapeApi, translateApi, tagApi, pipelineApi } from '@/lib/api';
+import type { Source, ScrapeRun, PipelineStatus } from '@/lib/api';
 import NavBar from '@/components/NavBar';
-import { Save, Check, X, RefreshCw, Languages } from 'lucide-react';
+import { Save, Check, X, RefreshCw, Languages, Tag, RotateCcw } from 'lucide-react';
 
 function Stat({ label, value, warn }: { label: string; value: number; warn?: number }) {
   return (
@@ -31,6 +31,10 @@ export default function SettingsPage() {
   const [scrapeRuns, setScrapeRuns] = useState<ScrapeRun[]>([]);
   const [runsLoading, setRunsLoading] = useState(false);
   const [translating, setTranslating] = useState(false);
+  const [tagging, setTagging] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [pipeline, setPipeline] = useState<PipelineStatus | null>(null);
+  const [pipelineLoading, setPipelineLoading] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -51,7 +55,16 @@ export default function SettingsPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
     loadRuns();
+    loadPipeline();
   }, [router]);
+
+  function loadPipeline() {
+    setPipelineLoading(true);
+    pipelineApi.status()
+      .then(res => setPipeline(res.data))
+      .catch(() => {})
+      .finally(() => setPipelineLoading(false));
+  }
 
   async function handleTranslate() {
     setTranslating(true);
@@ -60,10 +73,40 @@ export default function SettingsPage() {
       await translateApi.run();
       showToast('success', 'Translation complete.');
       loadRuns();
+      loadPipeline();
     } catch {
       showToast('error', 'Translation failed — check server logs');
     } finally {
       setTranslating(false);
+    }
+  }
+
+  async function handleTag() {
+    setTagging(true);
+    showToast('success', 'Tagging articles — this may take a few minutes…');
+    try {
+      await tagApi.run();
+      showToast('success', 'Tagging complete.');
+      loadRuns();
+      loadPipeline();
+    } catch {
+      showToast('error', 'Tagging failed — check server logs');
+    } finally {
+      setTagging(false);
+    }
+  }
+
+  async function handleRetryFailed() {
+    setRetrying(true);
+    try {
+      const res = await pipelineApi.retryFailed();
+      const { translation_reset, tagging_reset } = res.data as { translation_reset: number; tagging_reset: number };
+      showToast('success', `Reset ${translation_reset} translation + ${tagging_reset} tagging failures to pending.`);
+      loadPipeline();
+    } catch {
+      showToast('error', 'Retry reset failed.');
+    } finally {
+      setRetrying(false);
     }
   }
 
@@ -192,30 +235,90 @@ export default function SettingsPage() {
               </form>
             </div>
 
+            {/* Pipeline Status */}
+            <div className="rounded-xl border p-5" style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-slate-300">Pipeline</h2>
+                <button
+                  onClick={loadPipeline}
+                  disabled={pipelineLoading}
+                  className="p-1.5 rounded text-slate-500 hover:text-slate-300 disabled:opacity-40 transition-colors"
+                  title="Refresh pipeline status"
+                >
+                  <RefreshCw size={13} className={pipelineLoading ? 'animate-spin' : ''} />
+                </button>
+              </div>
+
+              {pipeline && (
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mb-4 text-xs">
+                  <span className="text-slate-500">
+                    <span className={pipeline.translation.pending > 0 ? 'text-amber-400 font-medium' : 'text-slate-300 font-medium'}>
+                      {pipeline.translation.pending}
+                    </span>{' '}pending translation
+                  </span>
+                  <span className="text-slate-500">
+                    <span className={pipeline.tagging.pending > 0 ? 'text-amber-400 font-medium' : 'text-slate-300 font-medium'}>
+                      {pipeline.tagging.pending}
+                    </span>{' '}pending tagging
+                  </span>
+                  {pipeline.translation.failed > 0 && (
+                    <span className="text-red-400">
+                      <span className="font-medium">{pipeline.translation.failed}</span> translation failed
+                    </span>
+                  )}
+                  {pipeline.tagging.failed > 0 && (
+                    <span className="text-red-400">
+                      <span className="font-medium">{pipeline.tagging.failed}</span> tagging failed
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleTranslate}
+                  disabled={translating || tagging}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs text-slate-300 hover:text-slate-100 disabled:opacity-40 transition-colors"
+                  style={{ borderColor: '#2a2d3a' }}
+                >
+                  <Languages size={13} className={translating ? 'animate-spin' : ''} />
+                  {translating ? 'Translating…' : 'Translate'}
+                </button>
+                <button
+                  onClick={handleTag}
+                  disabled={tagging || translating}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs text-slate-300 hover:text-slate-100 disabled:opacity-40 transition-colors"
+                  style={{ borderColor: '#2a2d3a' }}
+                >
+                  <Tag size={13} className={tagging ? 'animate-spin' : ''} />
+                  {tagging ? 'Tagging…' : 'Tag'}
+                </button>
+                {pipeline && (pipeline.translation.failed > 0 || pipeline.tagging.failed > 0) && (
+                  <button
+                    onClick={handleRetryFailed}
+                    disabled={retrying}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs text-red-400 hover:text-red-300 disabled:opacity-40 transition-colors"
+                    style={{ borderColor: '#2a2d3a' }}
+                  >
+                    <RotateCcw size={13} className={retrying ? 'animate-spin' : ''} />
+                    {retrying ? 'Resetting…' : 'Retry Failed'}
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Scrape History */}
             <div className="rounded-xl border p-5" style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}>
               <div className="flex items-center justify-between mb-1">
                 <h2 className="text-sm font-semibold text-slate-300">Scrape History</h2>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={handleTranslate}
-                    disabled={translating}
-                    title="Translate pending articles"
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs text-slate-300 hover:text-slate-100 disabled:opacity-40 transition-colors"
-                    style={{ borderColor: '#2a2d3a' }}
-                  >
-                    <Languages size={13} className={translating ? 'animate-spin' : ''} />
-                    {translating ? 'Translating…' : 'Translate'}
-                  </button>
-                  <button
-                    onClick={loadRuns}
-                    disabled={runsLoading}
-                    className="p-1.5 rounded text-slate-500 hover:text-slate-300 disabled:opacity-40 transition-colors"
-                    title="Refresh runs"
-                  >
-                    <RefreshCw size={13} className={runsLoading ? 'animate-spin' : ''} />
-                  </button>
-                </div>
+                <button
+                  onClick={loadRuns}
+                  disabled={runsLoading}
+                  className="p-1.5 rounded text-slate-500 hover:text-slate-300 disabled:opacity-40 transition-colors"
+                  title="Refresh runs"
+                >
+                  <RefreshCw size={13} className={runsLoading ? 'animate-spin' : ''} />
+                </button>
               </div>
               <p className="text-xs text-slate-500 mb-4">Last 10 scrape runs.</p>
 

@@ -308,8 +308,8 @@ async def tag_article(article_id: str, db: Client, entities: list[dict] | None =
 
 async def tag_pending_articles(db: Client) -> dict:
     """
-    Find articles that have no entries in article_entities OR article_topics yet.
-    Tag each one.
+    Find articles with tagging_status='pending' (translation must be done first).
+    Tag each one. Marks each article 'done' or 'failed' in tagging_status.
     Returns {"tagged": N, "failed": N}
     """
     api_key = os.environ.get("OPENAI_API_KEY", "")
@@ -325,35 +325,19 @@ async def tag_pending_articles(db: Client) -> dict:
         logger.error("Failed to fetch entities for batch tagging: %s", exc)
         return {"tagged": 0, "failed": 0}
 
-    # Find article IDs that already have entity tags
-    try:
-        tagged_entity_result = db.table("article_entities").select("article_id").execute()
-        tagged_topic_result = db.table("article_topics").select("article_id").execute()
-        already_tagged_ids: set[str] = set()
-        for row in tagged_entity_result.data or []:
-            already_tagged_ids.add(str(row["article_id"]))
-        for row in tagged_topic_result.data or []:
-            already_tagged_ids.add(str(row["article_id"]))
-    except Exception as exc:
-        logger.error("Failed to fetch already-tagged article IDs: %s", exc)
-        already_tagged_ids = set()
-
-    # Fetch articles with raw_text_en that are not yet tagged
+    # Fetch articles ready to tag: translation done, tagging pending
     try:
         articles_result = (
             db.table("articles")
             .select("id")
-            .not_.is_("raw_text_en", "null")
+            .eq("tagging_status", "pending")
+            .eq("translation_status", "done")
             .execute()
         )
-        all_articles: list[dict] = articles_result.data or []
+        pending: list[dict] = articles_result.data or []
     except Exception as exc:
         logger.error("Failed to fetch articles for tagging: %s", exc)
         return {"tagged": 0, "failed": 0}
-
-    pending = [
-        a for a in all_articles if str(a["id"]) not in already_tagged_ids
-    ]
 
     if not pending:
         logger.info("No pending articles to tag")
@@ -367,12 +351,12 @@ async def tag_pending_articles(db: Client) -> dict:
     for article in pending:
         article_id = str(article["id"])
         try:
-            result = await tag_article(article_id, db, entities=entities)
-            # Count as tagged if at least one entity or topic was matched,
-            # OR if GPT ran without error (even with 0 matches it was processed)
+            await tag_article(article_id, db, entities=entities)
+            db.table("articles").update({"tagging_status": "done"}).eq("id", article_id).execute()
             tagged += 1
         except Exception as exc:
             logger.error("Unhandled error tagging article %s: %s", article_id, exc)
+            db.table("articles").update({"tagging_status": "failed"}).eq("id", article_id).execute()
             failed += 1
 
     summary = {"tagged": tagged, "failed": failed}

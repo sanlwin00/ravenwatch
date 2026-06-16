@@ -155,6 +155,20 @@ export const translateApi = {
   run: () => api.post('/api/v1/translate'),
 };
 
+export const tagApi = {
+  run: () => api.post('/api/v1/scrape/tag'),
+};
+
+export interface PipelineStatus {
+  translation: { pending: number; failed: number };
+  tagging: { pending: number; failed: number };
+}
+
+export const pipelineApi = {
+  status: () => api.get<PipelineStatus>('/api/v1/pipeline/status'),
+  retryFailed: () => api.post('/api/v1/pipeline/retry-failed'),
+};
+
 export const settingsApi = {
   get: () => api.get<Settings>('/api/v1/settings'),
   update: (data: Settings) => api.put<Settings>('/api/v1/settings', data),
