@@ -21,6 +21,19 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (typeof window !== 'undefined' && error?.response?.status === 401) {
+      localStorage.removeItem('rw_token');
+      localStorage.removeItem('rw_user');
+      document.cookie = 'rw_token=; Max-Age=0; path=/';
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default api;
 
 // Types
