@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { isAuthenticated } from '@/lib/auth';
 import { articlesApi, scrapeApi, sourcesApi, entitiesApi, getExportUrl, narrativeApi } from '@/lib/api';
-import type { Article, Source, Entity, ArticleFilters, NarrativeTerm, NarrativeDataPoint } from '@/lib/api';
+import type { Article, Source, Entity, ArticleFilters, NarrativeTerm, NarrativeDataPoint, ScrapeRun } from '@/lib/api';
 import NavBar from '@/components/NavBar';
 import ArticleCard from '@/components/ArticleCard';
 import { RefreshCw, ChevronDown, Download, X, SlidersHorizontal } from 'lucide-react';
@@ -166,7 +166,7 @@ export default function DashboardPage() {
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [scraping, setScraping] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
   const [filters, setFilters] = useState<ArticleFilters>({ limit: LIMIT, offset: 0, has_entities: true });
@@ -190,6 +190,12 @@ export default function DashboardPage() {
     Promise.all([sourcesApi.list(), entitiesApi.list()]).then(([s, e]) => {
       setSources(s.data);
       setEntities(e.data);
+    }).catch(() => {});
+
+    scrapeApi.runs().then((res) => {
+      const runs: ScrapeRun[] = res.data;
+      const last = runs.find((r) => r.finished_at);
+      if (last?.finished_at) setLastUpdated(last.finished_at);
     }).catch(() => {});
 
     narrativeApi
@@ -267,35 +273,6 @@ export default function DashboardPage() {
   function handleMatchedToggle(checked: boolean) {
     setMatchedOnly(checked);
     setFilters(prev => ({ ...prev, has_entities: checked }));
-  }
-
-  async function handleScrape() {
-    setScraping(true);
-    showBanner('success', 'Scraping sources — results will appear below…');
-    try {
-      await scrapeApi.run();
-      const startCount = articles.length;
-      let waited = 0;
-      const poll = setInterval(async () => {
-        waited += 5;
-        await fetchArticles(filters, 0, false);
-        setOffset(0);
-        if (waited >= 90) {
-          clearInterval(poll);
-          setScraping(false);
-          showBanner('success', 'Scrape finished — check the feed above');
-        }
-      }, 5000);
-      setTimeout(() => {
-        if (articles.length > startCount) {
-          clearInterval(poll);
-          setScraping(false);
-        }
-      }, 6000);
-    } catch {
-      showBanner('error', 'Scrape failed — check server logs');
-      setScraping(false);
-    }
   }
 
   function handleExport() {
@@ -431,8 +408,16 @@ export default function DashboardPage() {
           <div className="mb-4">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
-                <h1 className="text-lg font-semibold text-slate-100">Dashboard</h1>
-                <p className="text-sm text-slate-500">{total} articles</p>
+                <h1 className="text-lg font-semibold text-slate-100">Feed</h1>
+                <p className="text-sm text-slate-500">
+                  {total} articles
+                  {lastUpdated && (
+                    <span className="ml-2 text-slate-600">
+                      · updated {new Date(lastUpdated).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}{' '}
+                      {new Date(lastUpdated).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <button
@@ -451,14 +436,6 @@ export default function DashboardPage() {
                   style={{ borderColor: '#2a2d3a' }}
                 >
                   <Download size={14} />
-                </button>
-                <button
-                  onClick={handleScrape}
-                  disabled={scraping}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
-                >
-                  <RefreshCw size={14} className={scraping ? 'animate-spin' : ''} />
-                  <span>{scraping ? 'Scraping...' : 'Scrape'}</span>
                 </button>
               </div>
             </div>

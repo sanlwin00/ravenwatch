@@ -6,7 +6,7 @@ import { isAuthenticated } from '@/lib/auth';
 import { settingsApi, sourcesApi, scrapeApi, translateApi, tagApi, pipelineApi } from '@/lib/api';
 import type { Source, ScrapeRun, PipelineStatus } from '@/lib/api';
 import NavBar from '@/components/NavBar';
-import { Save, Check, X, RefreshCw, Languages, Tag, RotateCcw } from 'lucide-react';
+import { Save, Check, X, RefreshCw, Languages, Tag, RotateCcw, Play } from 'lucide-react';
 
 function Stat({ label, value, warn }: { label: string; value: number; warn?: number }) {
   return (
@@ -30,6 +30,7 @@ export default function SettingsPage() {
   const [savingSource, setSavingSource] = useState<string | null>(null);
   const [scrapeRuns, setScrapeRuns] = useState<ScrapeRun[]>([]);
   const [runsLoading, setRunsLoading] = useState(false);
+  const [scraping, setScraping] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [tagging, setTagging] = useState(false);
   const [retrying, setRetrying] = useState(false);
@@ -107,6 +108,20 @@ export default function SettingsPage() {
       showToast('error', 'Retry reset failed.');
     } finally {
       setRetrying(false);
+    }
+  }
+
+  async function handleScrape() {
+    setScraping(true);
+    showToast('success', 'Scrape started — this may take a few minutes…');
+    try {
+      await scrapeApi.run();
+      showToast('success', 'Scrape complete.');
+      loadRuns();
+    } catch {
+      showToast('error', 'Scrape failed — check server logs.');
+    } finally {
+      setScraping(false);
     }
   }
 
@@ -311,14 +326,24 @@ export default function SettingsPage() {
             <div className="rounded-xl border p-5" style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}>
               <div className="flex items-center justify-between mb-1">
                 <h2 className="text-sm font-semibold text-slate-300">Scrape History</h2>
-                <button
-                  onClick={loadRuns}
-                  disabled={runsLoading}
-                  className="p-1.5 rounded text-slate-500 hover:text-slate-300 disabled:opacity-40 transition-colors"
-                  title="Refresh runs"
-                >
-                  <RefreshCw size={13} className={runsLoading ? 'animate-spin' : ''} />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={handleScrape}
+                    disabled={scraping}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-600 text-xs text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
+                  >
+                    <Play size={11} className={scraping ? 'animate-pulse' : ''} />
+                    {scraping ? 'Scraping…' : 'Scrape Now'}
+                  </button>
+                  <button
+                    onClick={loadRuns}
+                    disabled={runsLoading}
+                    className="p-1.5 rounded text-slate-500 hover:text-slate-300 disabled:opacity-40 transition-colors"
+                    title="Refresh runs"
+                  >
+                    <RefreshCw size={13} className={runsLoading ? 'animate-spin' : ''} />
+                  </button>
+                </div>
               </div>
               <p className="text-xs text-slate-500 mb-4">Last 10 scrape runs.</p>
 
