@@ -27,7 +27,7 @@ from supabase import Client
 
 from app.services.translator import translate_pending_articles
 from app.services.tagger import tag_pending_articles
-from app.services.alert_service import send_scrape_summary_email
+from app.services.alert_service import send_scrape_summary_email, send_telegram_batch_summary
 
 logger = logging.getLogger(__name__)
 
@@ -715,5 +715,7 @@ async def scrape_all_sources(db: Client) -> dict:
 
     email_result = await send_scrape_summary_email(db, summary)
     summary["emails_sent"] = email_result.get("sent", 0)
+
+    await send_telegram_batch_summary(db, summary)
 
     return summary

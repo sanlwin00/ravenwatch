@@ -21,6 +21,9 @@ from supabase import Client
 logger = logging.getLogger(__name__)
 
 RESEND_ENDPOINT = "https://api.resend.com/emails"
+TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
+
+_PRIORITY_EMOJI = {"critical": "🔴", "high": "🟡", "standard": "🔵"}
 
 # ---------------------------------------------------------------------------
 # Alert rule definitions (matched against entity names, case-insensitive)
@@ -92,6 +95,33 @@ async def _send_via_resend(to_email: str, subject: str, html: str) -> bool:
 
     except Exception as exc:
         logger.error("Resend exception for %s: %s", to_email, exc)
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Telegram transport
+# ---------------------------------------------------------------------------
+
+
+async def _send_telegram(text: str) -> bool:
+    """Send a message to the configured Telegram channel. Returns True on success."""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    channel_id = os.environ.get("TELEGRAM_CHANNEL_ID", "")
+    if not token or not channel_id:
+        logger.warning("TELEGRAM_BOT_TOKEN or TELEGRAM_CHANNEL_ID not set — skipping Telegram alert")
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                TELEGRAM_API.format(token=token),
+                json={"chat_id": channel_id, "text": text, "parse_mode": "HTML"},
+            )
+        if resp.status_code == 200:
+            return True
+        logger.warning("Telegram API returned %s: %s", resp.status_code, resp.text[:200])
+        return False
+    except Exception as exc:
+        logger.error("Telegram send exception: %s", exc)
         return False
 
 
@@ -227,6 +257,28 @@ async def evaluate_article_alerts(
     alert_title = f"[{priority.upper()}] {title}"
     _log_alert(db, subject=alert_title, channel="internal", article_id=article_id, priority=priority, rule_name=rule_name)
     logger.info("Alert fired: article=%s priority=%s rule=%s", article_id, priority, rule_name)
+
+    # Critical alerts fire immediately to Telegram
+    if priority == "critical":
+        emoji = _PRIORITY_EMOJI["critical"]
+        # Fetch article URL for the link
+        article_url = ""
+        try:
+            url_res = db.table("articles").select("url").eq("id", article_id).maybe_single().execute()
+            if url_res.data:
+                article_url = url_res.data.get("url", "")
+        except Exception:
+            pass
+        msg = (
+            f"{emoji} <b>CRITICAL ALERT</b>\n"
+            f"{title}\n"
+            f"Rule: <code>{rule_name}</code>\n"
+        )
+        if article_url:
+            msg += f'<a href="{article_url}">Read article →</a>'
+        await _send_telegram(msg)
+        _log_alert(db, subject=alert_title, channel="telegram", article_id=article_id, priority=priority, rule_name=rule_name)
+
     return priority
 
 
@@ -361,6 +413,57 @@ def _build_scrape_summary_html(scrape_result: dict, early_signal_count: int, top
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+
+async def send_telegram_batch_summary(db: Client, scrape_result: dict) -> None:
+    """
+    Send a batched Telegram summary of High/Standard alerts from the latest scrape run.
+    Called at end of each scrape run.
+    """
+    articles_inserted = scrape_result.get("articles_inserted", 0)
+    if articles_inserted == 0:
+        return  # Nothing to report
+
+    # Fetch High/Standard alerts logged since last ~2h (covers current run)
+    try:
+        from datetime import timedelta
+        since = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        result = (
+            db.table("alert_log")
+            .select("title, priority, article_id")
+            .in_("priority", ["high", "standard"])
+            .gte("sent_at", since)
+            .eq("channel", "internal")
+            .order("sent_at", desc=True)
+            .limit(20)
+            .execute()
+        )
+        alerts = result.data or []
+    except Exception as exc:
+        logger.warning("Could not fetch batch alerts for Telegram: %s", exc)
+        return
+
+    if not alerts:
+        return
+
+    high_alerts = [a for a in alerts if a["priority"] == "high"]
+    std_alerts = [a for a in alerts if a["priority"] == "standard"]
+
+    lines = [f"📊 <b>RavenWatch — Scrape Complete</b>"]
+    lines.append(f"{articles_inserted} new articles added\n")
+
+    if high_alerts:
+        lines.append(f"🟡 <b>{len(high_alerts)} HIGH</b>")
+        for a in high_alerts[:5]:
+            title = (a.get("title") or "").replace("[HIGH] ", "").replace("[high] ", "")
+            lines.append(f"  • {title}")
+        if len(high_alerts) > 5:
+            lines.append(f"  …and {len(high_alerts) - 5} more")
+
+    if std_alerts:
+        lines.append(f"\n🔵 <b>{len(std_alerts)} standard</b> entity matches")
+
+    await _send_telegram("\n".join(lines))
 
 
 async def send_scrape_summary_email(db: Client, scrape_result: dict) -> dict:
