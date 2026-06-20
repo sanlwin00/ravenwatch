@@ -45,7 +45,7 @@ export default function LoginPage() {
       >
         <div className="flex items-center justify-center gap-2 mb-8">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/icons/icon-180.png" alt="RavenWatch" width={36} height={36} className="rounded" />
+          <img src="/icons/icon-180.png?v=2" alt="RavenWatch" width={36} height={36} className="rounded" />
           <h1 className="text-xl font-semibold text-slate-100">RavenWatch</h1>
         </div>
 
