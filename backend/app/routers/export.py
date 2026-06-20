@@ -52,8 +52,3 @@ async def export_csv(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
-
-
-@router.get("/pdf")
-def export_pdf():
-    return {"message": "not implemented"}

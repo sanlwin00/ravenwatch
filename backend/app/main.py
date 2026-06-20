@@ -20,6 +20,7 @@ from app.routers import (
     sources,
     scrape,
     export,
+    pdf_export,
     settings,
     auth,
     narrative,
@@ -96,6 +97,11 @@ app.include_router(scrape.router, prefix=PREFIX)
 # Export router is registered without auth — the /csv endpoint is intentionally
 # public so browsers can download files directly. See export.py for rationale.
 app.include_router(export.router, prefix=PREFIX)
+# PDF export requires auth — browsers must attach a Bearer token (e.g. via
+# fetch/XHR) to download the report.
+app.include_router(
+    pdf_export.router, prefix=PREFIX, dependencies=[Depends(get_current_user)]
+)
 app.include_router(
     settings.router, prefix=PREFIX, dependencies=[Depends(get_current_user)]
 )
