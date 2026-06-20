@@ -180,7 +180,7 @@ export default function DashboardPage() {
   // — Trends state —
   const [terms, setTerms] = useState<NarrativeTerm[]>([]);
   const [trendsLoading, setTrendsLoading] = useState(true);
-  const [range, setRange] = useState<number>(30);
+  const [range, setRange] = useState<number>(7);
 
   useEffect(() => {
     if (!isAuthenticated()) {
