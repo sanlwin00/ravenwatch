@@ -174,6 +174,22 @@ export const settingsApi = {
   update: (data: Settings) => api.put<Settings>('/api/v1/settings', data),
 };
 
+// Narrative trend types
+export interface NarrativeDataPoint {
+  date: string;
+  count: number;
+}
+
+export interface NarrativeTerm {
+  term: string;
+  label: string;
+  data: NarrativeDataPoint[];
+}
+
+export const narrativeApi = {
+  trends: () => api.get<NarrativeTerm[]>('/api/v1/narrative/trends'),
+};
+
 export const getExportUrl = (filters: ArticleFilters): string => {
   const params = new URLSearchParams();
   if (filters.entity_id) params.set('entity_id', String(filters.entity_id));
