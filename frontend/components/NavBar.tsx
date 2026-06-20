@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { logout } from '@/lib/auth';
-import { LogOut, LayoutDashboard, Users, Settings, Menu, X, TrendingUp } from 'lucide-react';
+import { LogOut, LayoutDashboard, Users, Settings, Menu, X } from 'lucide-react';
 
 export default function NavBar() {
   const pathname = usePathname();
@@ -17,9 +17,8 @@ export default function NavBar() {
   }
 
   const links = [
-    { href: '/', label: 'Feed', icon: LayoutDashboard },
+    { href: '/', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/entities', label: 'Watchlist', icon: Users },
-    { href: '/trends', label: 'Trends', icon: TrendingUp },
     { href: '/settings', label: 'Settings', icon: Settings },
   ];
 
