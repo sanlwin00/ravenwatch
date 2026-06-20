@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { logout } from '@/lib/auth';
-import { Eye, LogOut, LayoutDashboard, Users, Settings, Menu, X, TrendingUp } from 'lucide-react';
+import { LogOut, LayoutDashboard, Users, Settings, Menu, X, TrendingUp } from 'lucide-react';
 
 export default function NavBar() {
   const pathname = usePathname();
@@ -31,7 +32,7 @@ export default function NavBar() {
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 text-blue-400 font-semibold text-base shrink-0">
-          <Eye size={20} />
+          <Image src="/icons/icon-180.png" alt="RavenWatch" width={28} height={28} className="rounded" />
           <span>RavenWatch</span>
         </Link>
 
