@@ -453,9 +453,15 @@ export default function SettingsPage() {
                         >
                           {source.active ? <Check size={11} /> : <X size={11} />}
                         </button>
-                        <span className="flex-1 text-sm text-slate-200 truncate font-medium" title={source.name}>
+                        <a
+                          href={sourceUrls[source.id] ?? source.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 text-sm text-slate-200 hover:text-blue-400 truncate font-medium transition-colors"
+                          title={source.url}
+                        >
                           {source.name}
-                        </span>
+                        </a>
                         <span className="shrink-0 text-xs px-1.5 py-0.5 rounded border border-slate-700 text-slate-500">
                           {source.type}
                         </span>

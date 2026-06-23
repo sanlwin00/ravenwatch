@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # On startup: close any scrape runs left open by a previous deployment
     try:
-        db = next(get_db())
+        db = get_db()
         now = datetime.now(timezone.utc).isoformat()
         result = (
             db.table("scrape_runs")
