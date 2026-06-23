@@ -291,7 +291,7 @@ export default function DashboardPage() {
     <div className="min-h-screen" style={{ backgroundColor: '#0f1117' }}>
       <NavBar />
 
-      <main className="max-w-6xl mx-auto px-4 py-6">
+      <main className="max-w-4xl mx-auto px-4 py-6">
         {/* — Narrative Trends chart — */}
         <div className="mb-8">
           <div className="mb-3 flex items-center justify-between gap-4 flex-wrap">
@@ -389,7 +389,7 @@ export default function DashboardPage() {
         </div>
 
         {/* — Article feed — */}
-        <div className="max-w-4xl">
+        <div>
           {banner && (
             <div
               className={`flex items-center justify-between gap-3 rounded-lg px-4 py-2.5 mb-4 text-sm ${
