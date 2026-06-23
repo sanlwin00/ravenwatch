@@ -446,22 +446,42 @@ async def send_telegram_batch_summary(db: Client, scrape_result: dict) -> None:
     if not alerts:
         return
 
+    # Batch-fetch article URLs for all alerts that have an article_id
+    article_ids = [a["article_id"] for a in alerts if a.get("article_id")]
+    url_map: dict = {}
+    if article_ids:
+        try:
+            url_res = db.table("articles").select("id, url").in_("id", article_ids).execute()
+            url_map = {r["id"]: r.get("url", "") for r in (url_res.data or [])}
+        except Exception:
+            pass
+
     high_alerts = [a for a in alerts if a["priority"] == "high"]
     std_alerts = [a for a in alerts if a["priority"] == "standard"]
 
     lines = [f"📊 <b>RavenWatch — Scrape Complete</b>"]
     lines.append(f"{articles_inserted} new articles added\n")
 
+    def _alert_line(a: dict) -> str:
+        title = (a.get("title") or "Untitled").replace("[HIGH] ", "").replace("[high] ", "").replace("[STANDARD] ", "")
+        url = url_map.get(a.get("article_id", ""), "")
+        if url:
+            return f'  • <a href="{url}">{title}</a>'
+        return f"  • {title}"
+
     if high_alerts:
         lines.append(f"🟡 <b>{len(high_alerts)} HIGH</b>")
         for a in high_alerts[:5]:
-            title = (a.get("title") or "").replace("[HIGH] ", "").replace("[high] ", "")
-            lines.append(f"  • {title}")
+            lines.append(_alert_line(a))
         if len(high_alerts) > 5:
             lines.append(f"  …and {len(high_alerts) - 5} more")
 
     if std_alerts:
-        lines.append(f"\n🔵 <b>{len(std_alerts)} standard</b> entity matches")
+        lines.append(f"\n🔵 <b>{len(std_alerts)} STANDARD</b>")
+        for a in std_alerts[:5]:
+            lines.append(_alert_line(a))
+        if len(std_alerts) > 5:
+            lines.append(f"  …and {len(std_alerts) - 5} more")
 
     await _send_telegram("\n".join(lines))
 
