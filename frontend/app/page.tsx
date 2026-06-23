@@ -483,7 +483,7 @@ export default function DashboardPage() {
                 <select
                   className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none col-span-2 sm:col-span-1"
                   style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
-                  onChange={(e) => setFilters(prev => ({ ...prev, source_id: e.target.value ? Number(e.target.value) : undefined }))}
+                  onChange={(e) => setFilters(prev => ({ ...prev, source_id: e.target.value || undefined }))}
                 >
                   <option value="">All Sources</option>
                   {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -491,7 +491,7 @@ export default function DashboardPage() {
                 <select
                   className="rounded-lg border px-3 py-1.5 text-sm text-slate-300 outline-none"
                   style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
-                  onChange={(e) => setFilters(prev => ({ ...prev, entity_id: e.target.value ? Number(e.target.value) : undefined }))}
+                  onChange={(e) => setFilters(prev => ({ ...prev, entity_id: e.target.value || undefined }))}
                 >
                   <option value="">All Entities</option>
                   {entities.map(en => <option key={en.id} value={en.id}>{en.name}</option>)}

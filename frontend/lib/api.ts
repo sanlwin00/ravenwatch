@@ -95,8 +95,8 @@ export interface Settings {
 }
 
 export interface ArticleFilters {
-  entity_id?: number;
-  source_id?: number;
+  entity_id?: string;
+  source_id?: string;
   topic?: string;
   tier?: number;
   has_entities?: boolean;
