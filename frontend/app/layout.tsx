@@ -27,6 +27,7 @@ export default function RootLayout({
     <html lang="en" className="h-full">
       <head>
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
       </head>
       <body className="min-h-full">{children}</body>
     </html>
