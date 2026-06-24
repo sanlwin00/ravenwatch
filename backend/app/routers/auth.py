@@ -4,8 +4,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.db import get_db
 from app.dependencies import get_current_user
+from pydantic import BaseModel
+
 from app.models.user import UserLogin
-from app.services.auth_service import authenticate_user, create_access_token
+from app.services.auth_service import (
+    authenticate_user,
+    create_access_token,
+    get_user_by_email,
+    hash_password,
+    verify_password,
+)
 from app.services.user_seed import seed_users
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -37,6 +45,26 @@ def logout():
 @router.get("/me")
 async def me(current_user: dict = Depends(get_current_user)):
     return {"email": current_user["email"], "id": str(current_user.get("id", ""))}
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/change-password")
+async def change_password(
+    body: ChangePasswordRequest,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    if len(body.new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters.")
+    user = await get_user_by_email(db, current_user["email"])
+    if not user or not verify_password(body.current_password, user.get("password_hash", "")):
+        raise HTTPException(status_code=400, detail="Current password is incorrect.")
+    db.table("users").update({"password_hash": hash_password(body.new_password)}).eq("id", user["id"]).execute()
+    return {"message": "Password updated."}
 
 
 @router.post("/seed-users")

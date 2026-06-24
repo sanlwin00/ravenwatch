@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isAuthenticated } from '@/lib/auth';
-import { settingsApi, sourcesApi, scrapeApi, translateApi, tagApi, pipelineApi } from '@/lib/api';
+import { settingsApi, sourcesApi, scrapeApi, translateApi, tagApi, pipelineApi, authApi } from '@/lib/api';
 import type { Source, ScrapeRun, PipelineStatus } from '@/lib/api';
 import NavBar from '@/components/NavBar';
 import { Save, Check, X, RefreshCw, Languages, Tag, RotateCcw, Play } from 'lucide-react';
@@ -36,6 +36,11 @@ export default function SettingsPage() {
   const [retrying, setRetrying] = useState(false);
   const [pipeline, setPipeline] = useState<PipelineStatus | null>(null);
   const [pipelineLoading, setPipelineLoading] = useState(false);
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -151,6 +156,27 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      showToast('error', 'New passwords do not match.');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await authApi.changePassword(currentPassword, newPassword);
+      showToast('success', 'Password updated.');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      showToast('error', msg || 'Failed to update password.');
+    } finally {
+      setChangingPassword(false);
+    }
+  }
+
   async function handleSourceSave(source: Source) {
     const newUrl = sourceUrls[source.id];
     if (!newUrl?.trim() || newUrl === source.url) return;
@@ -246,6 +272,49 @@ export default function SettingsPage() {
                 >
                   <Save size={14} />
                   {saving ? 'Saving...' : 'Save Settings'}
+                </button>
+              </form>
+            </div>
+
+            {/* Change Password */}
+            <div className="rounded-xl border p-5" style={{ backgroundColor: '#1a1d27', borderColor: '#2a2d3a' }}>
+              <h2 className="text-sm font-semibold text-slate-300 mb-4">Change Password</h2>
+              <form onSubmit={handleChangePassword} className="space-y-3">
+                <input
+                  type="password"
+                  placeholder="Current password"
+                  required
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="w-full rounded-lg border px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500"
+                  style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a' }}
+                />
+                <input
+                  type="password"
+                  placeholder="New password (min 8 chars)"
+                  required
+                  minLength={8}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full rounded-lg border px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500"
+                  style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a' }}
+                />
+                <input
+                  type="password"
+                  placeholder="Confirm new password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full rounded-lg border px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500"
+                  style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a' }}
+                />
+                <button
+                  type="submit"
+                  disabled={changingPassword}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
+                >
+                  <Save size={14} />
+                  {changingPassword ? 'Updating...' : 'Update Password'}
                 </button>
               </form>
             </div>
