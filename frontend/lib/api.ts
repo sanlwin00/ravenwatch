@@ -111,6 +111,8 @@ export interface ArticleFilters {
 export const authApi = {
   login: (email: string, password: string) =>
     api.post<LoginResponse>('/api/v1/auth/login', { email, password }),
+  changePassword: (current_password: string, new_password: string) =>
+    api.post('/api/v1/auth/change-password', { current_password, new_password }),
 };
 
 export const articlesApi = {
