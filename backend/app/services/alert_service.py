@@ -105,24 +105,29 @@ async def _send_via_resend(to_email: str, subject: str, html: str) -> bool:
 
 async def _send_telegram(text: str) -> bool:
     """Send a message to the configured Telegram channel. Returns True on success."""
+    import asyncio
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     channel_id = os.environ.get("TELEGRAM_CHANNEL_ID", "")
     if not token or not channel_id:
         logger.warning("TELEGRAM_BOT_TOKEN or TELEGRAM_CHANNEL_ID not set — skipping Telegram alert")
         return False
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(
-                TELEGRAM_API.format(token=token),
-                json={"chat_id": channel_id, "text": text, "parse_mode": "HTML"},
-            )
-        if resp.status_code == 200:
-            return True
-        logger.warning("Telegram API returned %s: %s", resp.status_code, resp.text[:200])
-        return False
-    except Exception as exc:
-        logger.error("Telegram send exception: %s", exc)
-        return False
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.post(
+                    TELEGRAM_API.format(token=token),
+                    json={"chat_id": channel_id, "text": text, "parse_mode": "HTML"},
+                )
+            if resp.status_code == 200:
+                return True
+            logger.warning("Telegram API returned %s: %s", resp.status_code, resp.text[:200])
+            return False
+        except Exception as exc:
+            logger.warning("Telegram send attempt %d failed: %s", attempt + 1, exc)
+            if attempt < 2:
+                await asyncio.sleep(2 ** attempt)
+    logger.error("Telegram send failed after 3 attempts")
+    return False
 
 
 # ---------------------------------------------------------------------------
