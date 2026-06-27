@@ -36,7 +36,10 @@ GPT_MODEL = "gpt-4o-mini"
 SYSTEM_PROMPT = (
     "You are an OSINT analyst tagging news articles about China-Myanmar relations.\n"
     "Given an article text, identify:\n"
-    "1. Which entities from the watchlist are mentioned (by name or alias)\n"
+    "1. Which entities from the watchlist are mentioned — STRICT MATCHING RULES:\n"
+    "   - The entity's FULL name (both surname AND given name) must appear explicitly in the article.\n"
+    "   - Do NOT match on surname alone. 'Wang Ning' and 'Wang Yubo' are NOT matches for 'Wang Yi'.\n"
+    "   - Do NOT infer or guess — only match if the exact name or a listed alias is present.\n"
     "2. Which topics apply: ceasefire, mediation, border_security, election, bri\n"
     "3. A 1-2 sentence English summary of the article's key intelligence value\n\n"
     'Return JSON only: {"matched_entities": [{"id": "...", "matched_alias": "..."}], "topics": [...], "summary": "..."}'
