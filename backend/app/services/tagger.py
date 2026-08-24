@@ -229,7 +229,8 @@ async def tag_article(article_id: str, db: Client, entities: list[dict] | None =
             except Exception as exc:
                 logger.warning("Failed to backfill raw_text_en for article %s: %s", article_id, exc)
     if not raw_text_en:
-        logger.debug("Article %s has no raw_text_en — skipping tagging", article_id)
+        logger.warning("Article %s has no taggable text (raw_text_en empty, lang=%s) — skipping tagging",
+                       article_id, article.get("language_original"))
         return {"entities_matched": 0, "topics_matched": 0}
 
     # Load entities from DB if not provided
