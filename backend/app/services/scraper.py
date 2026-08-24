@@ -556,7 +556,7 @@ def _insert_article(db: Client, article: dict, retention_days: int) -> bool:
         "url": url,
         "published_at": published_at_iso,
         "raw_text_original": article.get("raw_text") or None,
-        "raw_text_en": None,
+        "raw_text_en": (article.get("raw_text") or None) if lang.lower() == "en" else None,
         "language_original": lang,
         "scraped_at": now.isoformat(),
         "expires_at": expires_at.isoformat(),
