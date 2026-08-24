@@ -204,7 +204,7 @@ async def tag_article(article_id: str, db: Client, entities: list[dict] | None =
     try:
         result = (
             db.table("articles")
-            .select("id, raw_text_en")
+            .select("id, raw_text_en, raw_text_original, language_original")
             .eq("id", article_id)
             .single()
             .execute()
@@ -219,8 +219,18 @@ async def tag_article(article_id: str, db: Client, entities: list[dict] | None =
         return {"entities_matched": 0, "topics_matched": 0}
 
     raw_text_en: str | None = article.get("raw_text_en")
+    if not raw_text_en and article.get("language_original", "").lower() == "en":
+        # English articles inserted before the scraper fix had raw_text_en=NULL;
+        # use the original scraped text directly and backfill raw_text_en.
+        raw_text_en = article.get("raw_text_original")
+        if raw_text_en:
+            try:
+                db.table("articles").update({"raw_text_en": raw_text_en}).eq("id", article_id).execute()
+            except Exception as exc:
+                logger.warning("Failed to backfill raw_text_en for article %s: %s", article_id, exc)
     if not raw_text_en:
-        logger.debug("Article %s has no raw_text_en — skipping tagging", article_id)
+        logger.warning("Article %s has no taggable text (raw_text_en empty, lang=%s) — skipping tagging",
+                       article_id, article.get("language_original"))
         return {"entities_matched": 0, "topics_matched": 0}
 
     # Load entities from DB if not provided
