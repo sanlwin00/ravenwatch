@@ -70,6 +70,7 @@ export interface Source {
 export interface Article {
   id: number;
   title: string;
+  title_en?: string;
   url: string;
   source: Source;
   published_at: string;
@@ -97,6 +98,7 @@ export interface Settings {
 export interface ArticleFilters {
   entity_id?: string;
   source_id?: string;
+  source_origin?: 'china' | 'myanmar';
   topic?: string;
   tier?: number;
   has_entities?: boolean;
@@ -120,6 +122,14 @@ export const articlesApi = {
     api.get<PaginatedArticles | Article[]>('/api/v1/articles', { params: filters }),
   get: (id: string | number) => api.get<Article>(`/api/v1/articles/${id}`),
   delete: (id: string | number) => api.delete(`/api/v1/articles/${id}`),
+  addEntity: (id: string | number, entityId: string) =>
+    api.post(`/api/v1/articles/${id}/entities`, { entity_id: entityId }),
+  removeEntity: (id: string | number, entityId: string) =>
+    api.delete(`/api/v1/articles/${id}/entities/${entityId}`),
+  addTopic: (id: string | number, topic: string) =>
+    api.post(`/api/v1/articles/${id}/topics`, { topic }),
+  removeTopic: (id: string | number, topic: string) =>
+    api.delete(`/api/v1/articles/${id}/topics/${topic}`),
 };
 
 export const entitiesApi = {

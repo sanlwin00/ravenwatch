@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { isAuthenticated } from '@/lib/auth';
-import { articlesApi } from '@/lib/api';
-import type { Article } from '@/lib/api';
+import { articlesApi, entitiesApi } from '@/lib/api';
+import type { Article, Entity } from '@/lib/api';
 import NavBar from '@/components/NavBar';
 import EntityBadge from '@/components/EntityBadge';
 import TopicBadge from '@/components/TopicBadge';
@@ -18,17 +18,57 @@ export default function ArticleDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const [article, setArticle] = useState<Article | null>(null);
+  const [allEntities, setAllEntities] = useState<Entity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [addingEntity, setAddingEntity] = useState(false);
+  const [addingTopic, setAddingTopic] = useState(false);
+
+  const KNOWN_TOPICS = ['ceasefire', 'mediation', 'border_security', 'election', 'bri'];
+
+  const refreshArticle = async () => {
+    const res = await articlesApi.get(id);
+    setArticle(res.data);
+  };
+
+  const handleAddEntity = async (entityId: string) => {
+    setAddingEntity(false);
+    if (!entityId) return;
+    await articlesApi.addEntity(id, entityId);
+    await refreshArticle();
+  };
+
+  const handleRemoveEntity = async (entityId: string) => {
+    await articlesApi.removeEntity(id, entityId);
+    await refreshArticle();
+  };
+
+  const handleAddTopic = async (topic: string) => {
+    setAddingTopic(false);
+    if (!topic) return;
+    await articlesApi.addTopic(id, topic);
+    await refreshArticle();
+  };
+
+  const handleRemoveTopic = async (topic: string) => {
+    await articlesApi.removeTopic(id, topic);
+    await refreshArticle();
+  };
 
   useEffect(() => {
     if (!isAuthenticated()) {
       router.replace('/login');
       return;
     }
-    articlesApi.get(id)
-      .then(res => setArticle(res.data))
+    Promise.all([
+      articlesApi.get(id),
+      entitiesApi.list(),
+    ])
+      .then(([articleRes, entitiesRes]) => {
+        setArticle(articleRes.data);
+        setAllEntities(entitiesRes.data as Entity[]);
+      })
       .catch(() => setError('Article not found.'))
       .finally(() => setLoading(false));
   }, [id, router]);
@@ -100,7 +140,7 @@ export default function ArticleDetailPage() {
 
             {/* Title */}
             <h1 className="text-xl font-semibold text-slate-100 leading-snug mb-3">
-              {article.title}
+              {article.title_en || article.title}
             </h1>
 
             {/* Meta */}
@@ -123,28 +163,80 @@ export default function ArticleDetailPage() {
             </div>
 
             {/* Entities */}
-            {article.entities?.length > 0 && (
-              <div className="mb-4">
-                <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Entities</h2>
-                <div className="flex flex-wrap gap-1.5">
-                  {article.entities.map(entity => (
-                    <EntityBadge key={entity.id} entity={entity} />
-                  ))}
-                </div>
+            <div className="mb-4">
+              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Entities</h2>
+              <div className="flex flex-wrap gap-1.5 items-center">
+                {article.entities?.map(entity => (
+                  <div key={entity.id} className="inline-flex items-center gap-0.5">
+                    <EntityBadge entity={entity} />
+                    <button
+                      onClick={() => handleRemoveEntity(String(entity.id))}
+                      className="ml-0.5 text-slate-500 hover:text-red-400 text-sm leading-none"
+                      title="Remove"
+                    >×</button>
+                  </div>
+                ))}
+                {addingEntity ? (
+                  <select
+                    autoFocus
+                    className="text-xs rounded border bg-slate-800 text-slate-300 px-2 py-0.5"
+                    style={{ borderColor: '#2a2d3a' }}
+                    defaultValue=""
+                    onChange={e => handleAddEntity(e.target.value)}
+                    onBlur={() => setAddingEntity(false)}
+                  >
+                    <option value="" disabled>Select entity…</option>
+                    {allEntities
+                      .filter(e => !article.entities?.find((ae: Entity) => String(ae.id) === String(e.id)))
+                      .map(e => <option key={e.id} value={String(e.id)}>{e.name}</option>)}
+                  </select>
+                ) : (
+                  <button
+                    onClick={() => setAddingEntity(true)}
+                    className="text-xs text-slate-500 hover:text-slate-300 border rounded px-2 py-0.5"
+                    style={{ borderColor: '#2a2d3a' }}
+                  >+ Add</button>
+                )}
               </div>
-            )}
+            </div>
 
             {/* Topics */}
-            {article.topics?.length > 0 && (
-              <div className="mb-5">
-                <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Topics</h2>
-                <div className="flex flex-wrap gap-1.5">
-                  {article.topics.map(topic => (
-                    <TopicBadge key={topic} topic={topic} />
-                  ))}
-                </div>
+            <div className="mb-5">
+              <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Topics</h2>
+              <div className="flex flex-wrap gap-1.5 items-center">
+                {article.topics?.map(topic => (
+                  <div key={topic} className="inline-flex items-center gap-0.5">
+                    <TopicBadge topic={topic} />
+                    <button
+                      onClick={() => handleRemoveTopic(topic)}
+                      className="ml-0.5 text-slate-500 hover:text-red-400 text-sm leading-none"
+                      title="Remove"
+                    >×</button>
+                  </div>
+                ))}
+                {addingTopic ? (
+                  <select
+                    autoFocus
+                    className="text-xs rounded border bg-slate-800 text-slate-300 px-2 py-0.5"
+                    style={{ borderColor: '#2a2d3a' }}
+                    defaultValue=""
+                    onChange={e => handleAddTopic(e.target.value)}
+                    onBlur={() => setAddingTopic(false)}
+                  >
+                    <option value="" disabled>Select topic…</option>
+                    {KNOWN_TOPICS
+                      .filter(t => !article.topics?.includes(t))
+                      .map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+                  </select>
+                ) : (
+                  <button
+                    onClick={() => setAddingTopic(true)}
+                    className="text-xs text-slate-500 hover:text-slate-300 border rounded px-2 py-0.5"
+                    style={{ borderColor: '#2a2d3a' }}
+                  >+ Add</button>
+                )}
               </div>
-            )}
+            </div>
 
             {/* Divider */}
             <div className="border-t my-5" style={{ borderColor: '#2a2d3a' }} />

@@ -76,7 +76,7 @@ async def translate_article(article_id: str, db: Client) -> bool:
     try:
         result = (
             db.table("articles")
-            .select("id, raw_text_original, language_original")
+            .select("id, title, raw_text_original, language_original")
             .eq("id", article_id)
             .single()
             .execute()
@@ -103,12 +103,20 @@ async def translate_article(article_id: str, db: Client) -> bool:
     if translated is None:
         return False
 
+    update_payload: dict = {"raw_text_en": translated}
+
+    title = article.get("title")
+    if title:
+        translated_title = await translate_text(title)
+        if translated_title:
+            update_payload["title_en"] = translated_title
+
     try:
-        db.table("articles").update({"raw_text_en": translated}).eq("id", article_id).execute()
+        db.table("articles").update(update_payload).eq("id", article_id).execute()
         logger.info("Translated article %s", article_id)
         return True
     except Exception as exc:
-        logger.error("Failed to update raw_text_en for article %s: %s", article_id, exc)
+        logger.error("Failed to update translation fields for article %s: %s", article_id, exc)
         return False
 
 
@@ -126,7 +134,7 @@ async def translate_pending_articles(db: Client) -> dict:
     try:
         result = (
             db.table("articles")
-            .select("id, language_original, raw_text_original")
+            .select("id, title, language_original, raw_text_original")
             .eq("translation_status", "pending")
             .execute()
         )
@@ -148,6 +156,7 @@ async def translate_pending_articles(db: Client) -> dict:
                 try:
                     db.table("articles").update({
                         "raw_text_en": raw_original,
+                        "title_en": article.get("title"),
                         "translation_status": "done",
                     }).eq("id", article_id).execute()
                     translated += 1

@@ -172,6 +172,7 @@ export default function DashboardPage() {
   const [filters, setFilters] = useState<ArticleFilters>({ limit: LIMIT, offset: 0, has_entities: true });
   const [search, setSearch] = useState('');
   const [matchedOnly, setMatchedOnly] = useState(true);
+  const [sourceOrigin, setSourceOrigin] = useState<'china' | 'myanmar' | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [banner, setBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -273,6 +274,13 @@ export default function DashboardPage() {
   function handleMatchedToggle(checked: boolean) {
     setMatchedOnly(checked);
     setFilters(prev => ({ ...prev, has_entities: checked }));
+  }
+
+  function handleSourceOriginToggle(origin: 'china' | 'myanmar') {
+    const next = sourceOrigin === origin ? null : origin;
+    setSourceOrigin(next);
+    setOffset(0);
+    setFilters(prev => ({ ...prev, source_origin: next ?? undefined }));
   }
 
   function handleExport() {
@@ -438,6 +446,32 @@ export default function DashboardPage() {
                   <Download size={14} />
                 </button>
               </div>
+            </div>
+
+            {/* Source origin quick filters */}
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => handleSourceOriginToggle('china')}
+                className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                  sourceOrigin === 'china'
+                    ? 'border-red-500/60 bg-red-500/10 text-red-400'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                style={{ borderColor: sourceOrigin === 'china' ? undefined : '#2a2d3a' }}
+              >
+                🇨🇳 China → Myanmar
+              </button>
+              <button
+                onClick={() => handleSourceOriginToggle('myanmar')}
+                className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                  sourceOrigin === 'myanmar'
+                    ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-400'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                style={{ borderColor: sourceOrigin === 'myanmar' ? undefined : '#2a2d3a' }}
+              >
+                🇲🇲 Myanmar → China
+              </button>
             </div>
 
             <div className="flex items-center justify-between gap-3 mb-2">

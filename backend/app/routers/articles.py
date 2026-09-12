@@ -4,9 +4,11 @@ import asyncio
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel as PydanticBase
 from supabase import Client
 
 from app.db import get_db
+from app.dependencies import get_current_user
 from app.services.article_service import get_articles, get_article, get_article_count, resolve_filter_ids
 
 router = APIRouter(prefix="/articles", tags=["articles"])
@@ -16,6 +18,7 @@ router = APIRouter(prefix="/articles", tags=["articles"])
 async def list_articles(
     entity_id: Optional[str] = Query(default=None),
     source_id: Optional[str] = Query(default=None),
+    source_origin: Optional[str] = Query(default=None, description="Filter by source origin: 'china' or 'myanmar'"),
     topic: Optional[str] = Query(default=None),
     tier: Optional[int] = Query(default=None, description="Filter by entity tier: 1=Critical, 2=High, 3=Medium"),
     has_entities: bool = Query(default=False, description="Only return articles with tagged entities"),
@@ -39,6 +42,7 @@ async def list_articles(
             limit=limit,
             offset=offset,
             filter_ids=filter_ids,
+            source_origin=source_origin,
         ),
         get_article_count(
             db,
@@ -47,6 +51,7 @@ async def list_articles(
             to_date=to_date,
             search=search,
             filter_ids=filter_ids,
+            source_origin=source_origin,
         ),
     )
     return {"articles": articles, "total": total, "limit": limit, "offset": offset}
@@ -71,3 +76,71 @@ async def delete_article(
     result = db.table("articles").delete().eq("id", article_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Article not found")
+
+
+# ---------------------------------------------------------------------------
+# Manual tagging endpoints
+# ---------------------------------------------------------------------------
+
+class AddEntityRequest(PydanticBase):
+    entity_id: str
+
+class AddTopicRequest(PydanticBase):
+    topic: str
+
+
+@router.post("/{article_id}/entities", status_code=201)
+async def add_entity_tag(
+    article_id: str,
+    body: AddEntityRequest,
+    db: Client = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    res = db.table("articles").select("id").eq("id", article_id).maybe_single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Article not found")
+    db.table("article_entities").upsert(
+        {"article_id": article_id, "entity_id": body.entity_id},
+        on_conflict="article_id,entity_id",
+    ).execute()
+    # Tagged manually — exempt from retention expiry
+    db.table("articles").update({"expires_at": None}).eq("id", article_id).execute()
+    return {"ok": True}
+
+
+@router.delete("/{article_id}/entities/{entity_id}", status_code=204)
+async def remove_entity_tag(
+    article_id: str,
+    entity_id: str,
+    db: Client = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    db.table("article_entities").delete().eq("article_id", article_id).eq("entity_id", entity_id).execute()
+
+
+@router.post("/{article_id}/topics", status_code=201)
+async def add_topic_tag(
+    article_id: str,
+    body: AddTopicRequest,
+    db: Client = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    res = db.table("articles").select("id").eq("id", article_id).maybe_single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Article not found")
+    db.table("article_topics").upsert(
+        {"article_id": article_id, "topic": body.topic},
+        on_conflict="article_id,topic",
+    ).execute()
+    db.table("articles").update({"expires_at": None}).eq("id", article_id).execute()
+    return {"ok": True}
+
+
+@router.delete("/{article_id}/topics/{topic}", status_code=204)
+async def remove_topic_tag(
+    article_id: str,
+    topic: str,
+    db: Client = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    db.table("article_topics").delete().eq("article_id", article_id).eq("topic", topic).execute()

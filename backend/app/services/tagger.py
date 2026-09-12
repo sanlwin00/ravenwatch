@@ -294,6 +294,13 @@ async def tag_article(article_id: str, db: Client, entities: list[dict] | None =
                 exc,
             )
 
+    # Exempt matched articles from retention expiry
+    if entities_matched > 0 or topics_matched > 0:
+        try:
+            db.table("articles").update({"expires_at": None}).eq("id", article_id).execute()
+        except Exception as exc:
+            logger.warning("Failed to clear expires_at for matched article %s: %s", article_id, exc)
+
     # Update narrative metrics
     _update_narrative_metrics(db, raw_text_en)
 
