@@ -85,7 +85,7 @@ export default function EntitiesPage() {
       aliases: form.aliases ? form.aliases.split('\n').map(s => s.trim()).filter(Boolean) : [],
       type: form.type,
       tier: form.tier,
-      country: form.country || undefined,
+      country: (form.country as 'CN' | 'MM') || undefined,
     };
     try {
       if (editId !== null) {
