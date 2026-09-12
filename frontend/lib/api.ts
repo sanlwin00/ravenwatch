@@ -56,6 +56,7 @@ export interface Entity {
   type: string;
   tier: number;
   aliases: string[];
+  country?: 'CN' | 'MM';
 }
 
 export interface Source {

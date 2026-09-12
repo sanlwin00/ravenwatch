@@ -12,6 +12,7 @@ class Entity(BaseModel):
     aliases: list[Any] = []
     type: str
     tier: Optional[int] = 2
+    country: Optional[str] = None  # 'CN' or 'MM'
     notes: Optional[str] = None
     created_by: Optional[str] = None
     created_at: datetime
@@ -23,6 +24,7 @@ class EntityCreate(BaseModel):
     aliases: list[Any] = []
     type: str
     tier: Optional[int] = 2
+    country: Optional[str] = None
     notes: Optional[str] = None
     created_by: Optional[str] = None
 
@@ -33,4 +35,5 @@ class EntityUpdate(BaseModel):
     aliases: Optional[list[Any]] = None
     type: Optional[str] = None
     tier: Optional[int] = None
+    country: Optional[str] = None
     notes: Optional[str] = None
