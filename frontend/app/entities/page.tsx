@@ -183,7 +183,7 @@ export default function EntitiesPage() {
                   </span>
                   {entity.country && (
                     <span className="text-xs px-1.5 py-0.5 rounded border border-slate-600 text-slate-400">
-                      {entity.country === 'CN' ? '🇨🇳 CN' : '🇲🇲 MM'}
+                      {entity.country === 'CN' ? '🇨🇳' : '🇲🇲'}
                     </span>
                   )}
                 </div>
