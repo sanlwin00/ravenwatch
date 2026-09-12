@@ -17,6 +17,7 @@ interface EntityFormData {
   aliases: string;
   type: string;
   tier: number;
+  country: string;
 }
 
 const EMPTY_FORM: EntityFormData = {
@@ -25,6 +26,7 @@ const EMPTY_FORM: EntityFormData = {
   aliases: '',
   type: 'person',
   tier: 1,
+  country: '',
 };
 
 export default function EntitiesPage() {
@@ -67,6 +69,7 @@ export default function EntitiesPage() {
       aliases: (entity.aliases || []).join('\n'),
       type: entity.type,
       tier: entity.tier,
+      country: entity.country || '',
     });
     setError('');
     setShowModal(true);
@@ -82,6 +85,7 @@ export default function EntitiesPage() {
       aliases: form.aliases ? form.aliases.split('\n').map(s => s.trim()).filter(Boolean) : [],
       type: form.type,
       tier: form.tier,
+      country: form.country || undefined,
     };
     try {
       if (editId !== null) {
@@ -177,6 +181,11 @@ export default function EntitiesPage() {
                   }`}>
                     {entity.tier === 1 ? 'Critical' : entity.tier === 2 ? 'High' : 'Medium'}
                   </span>
+                  {entity.country && (
+                    <span className="text-xs px-1.5 py-0.5 rounded border border-slate-600 text-slate-400">
+                      {entity.country === 'CN' ? '🇨🇳 CN' : '🇲🇲 MM'}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
@@ -236,7 +245,7 @@ export default function EntitiesPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Type</label>
                   <select
@@ -261,6 +270,19 @@ export default function EntitiesPage() {
                     <option value={1}>1 — Critical</option>
                     <option value={2}>2 — High</option>
                     <option value={3}>3 — Medium</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Country</label>
+                  <select
+                    value={form.country}
+                    onChange={e => setForm(p => ({ ...p, country: e.target.value }))}
+                    className="w-full rounded-lg border px-3 py-2 text-sm text-slate-300 outline-none"
+                    style={{ backgroundColor: '#0f1117', borderColor: '#2a2d3a', colorScheme: 'dark' }}
+                  >
+                    <option value="">—</option>
+                    <option value="CN">🇨🇳 CN</option>
+                    <option value="MM">🇲🇲 MM</option>
                   </select>
                 </div>
               </div>

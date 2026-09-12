@@ -5,12 +5,32 @@ import asyncio
 from supabase import Client
 
 # Fields needed for the article list view — excludes large text blobs
-LIST_COLUMNS = "id, source_id, title, url, published_at, scraped_at, language_original, is_early_signal, is_policy_signal"
+LIST_COLUMNS = "id, source_id, title, title_en, url, published_at, scraped_at, language_original, is_early_signal, is_policy_signal"
 
 
 def _build_base_query(db: Client):
-    """Return a base articles query with expiry filter applied."""
-    return db.table("articles").select(LIST_COLUMNS).gt("expires_at", "now()")
+    """Return a base articles query — expired articles hidden unless tagged/matched."""
+    return db.table("articles").select(LIST_COLUMNS).or_("expires_at.is.null,expires_at.gt.now()")
+
+
+async def _get_article_ids_with_entity_country(db: Client, country: str) -> set[str]:
+    ent_res = db.table("entities").select("id").eq("country", country).execute()
+    entity_ids = [row["id"] for row in (ent_res.data or [])]
+    if not entity_ids:
+        return set()
+    ae_res = db.table("article_entities").select("article_id").in_("entity_id", entity_ids).execute()
+    return {row["article_id"] for row in (ae_res.data or [])}
+
+
+async def _get_source_ids_by_origin(db: Client, origin: str) -> set[str]:
+    if origin == "china":
+        types = ["official", "yunnan", "thinktank"]
+    elif origin == "myanmar":
+        types = ["myanmar"]
+    else:
+        return set()
+    res = db.table("sources").select("id").in_("type", types).execute()
+    return {row["id"] for row in (res.data or [])}
 
 
 def _apply_filters(query, source_id, from_date, to_date):
@@ -166,12 +186,27 @@ async def get_articles(
     limit: int = 50,
     offset: int = 0,
     filter_ids: set[str] | None = None,
+    source_origin: str | None = None,
 ) -> list[dict]:
     """Query articles with optional filters. Returns enriched article dicts."""
 
     # If filters produced no IDs, return early
     if filter_ids is not None and not filter_ids:
         return []
+
+    # Resolve source IDs + opposite-country entity article IDs for origin filter
+    origin_source_ids: set[str] | None = None
+    entity_country_ids: set[str] | None = None
+    if source_origin:
+        origin_source_ids = await _get_source_ids_by_origin(db, source_origin)
+        if not origin_source_ids:
+            return []
+        # Also intersect with articles that have entities from the opposite country
+        opposite = "MM" if source_origin == "china" else "CN"
+        entity_country_ids = await _get_article_ids_with_entity_country(db, opposite)
+        # If no entities tagged yet, don't filter by entity country (graceful degradation)
+        if not entity_country_ids:
+            entity_country_ids = None
 
     if search:
         # Title search
@@ -180,6 +215,10 @@ async def get_articles(
         title_q = title_q.ilike("title", f"%{search}%")
         if filter_ids is not None:
             title_q = title_q.in_("id", list(filter_ids))
+        if origin_source_ids is not None:
+            title_q = title_q.in_("source_id", list(origin_source_ids))
+        if entity_country_ids is not None:
+            title_q = title_q.in_("id", list(entity_country_ids))
         title_res = title_q.execute()
         title_rows = title_res.data or []
 
@@ -189,6 +228,10 @@ async def get_articles(
         body_q = body_q.ilike("raw_text_en", f"%{search}%")
         if filter_ids is not None:
             body_q = body_q.in_("id", list(filter_ids))
+        if origin_source_ids is not None:
+            body_q = body_q.in_("source_id", list(origin_source_ids))
+        if entity_country_ids is not None:
+            body_q = body_q.in_("id", list(entity_country_ids))
         body_res = body_q.execute()
         body_rows = body_res.data or []
 
@@ -210,6 +253,10 @@ async def get_articles(
     query = _apply_filters(query, source_id, from_date, to_date)
     if filter_ids is not None:
         query = query.in_("id", list(filter_ids))
+    if origin_source_ids is not None:
+        query = query.in_("source_id", list(origin_source_ids))
+    if entity_country_ids is not None:
+        query = query.in_("id", list(entity_country_ids))
 
     # Primary DB sort by scraped_at (always set) for correct cross-page ordering.
     # Re-sort in Python by effective date (published_at ?? scraped_at) for correct
@@ -224,7 +271,7 @@ async def get_articles(
 async def get_article(db: Client, article_id: str) -> dict | None:
     """Get a single article by ID, enriched. Returns None if not found or expired."""
     res = (
-        db.table("articles").select("*").gt("expires_at", "now()")
+        db.table("articles").select("*").or_("expires_at.is.null,expires_at.gt.now()")
         .eq("id", article_id)
         .maybe_single()
         .execute()
@@ -242,35 +289,59 @@ async def get_article_count(
     to_date: str | None = None,
     search: str | None = None,
     filter_ids: set[str] | None = None,
+    source_origin: str | None = None,
 ) -> int:
     """Return total article count matching the given filters (for pagination)."""
 
     if filter_ids is not None and not filter_ids:
         return 0
 
+    origin_source_ids: set[str] | None = None
+    entity_country_ids: set[str] | None = None
+    if source_origin:
+        origin_source_ids = await _get_source_ids_by_origin(db, source_origin)
+        if not origin_source_ids:
+            return 0
+        opposite = "MM" if source_origin == "china" else "CN"
+        entity_country_ids = await _get_article_ids_with_entity_country(db, opposite)
+        if not entity_country_ids:
+            entity_country_ids = None
+
     if search:
         # Must materialise results to count after dedup (same logic as get_articles)
-        title_q = db.table("articles").select("id").gt("expires_at", "now()")
+        title_q = db.table("articles").select("id").or_("expires_at.is.null,expires_at.gt.now()")
         title_q = _apply_filters(title_q, source_id, from_date, to_date)
         title_q = title_q.ilike("title", f"%{search}%")
         if filter_ids is not None:
             title_q = title_q.in_("id", list(filter_ids))
+        if origin_source_ids is not None:
+            title_q = title_q.in_("source_id", list(origin_source_ids))
+        if entity_country_ids is not None:
+            title_q = title_q.in_("id", list(entity_country_ids))
         title_res = title_q.execute()
 
-        body_q = db.table("articles").select("id").gt("expires_at", "now()")
+        body_q = db.table("articles").select("id").or_("expires_at.is.null,expires_at.gt.now()")
         body_q = _apply_filters(body_q, source_id, from_date, to_date)
         body_q = body_q.ilike("raw_text_en", f"%{search}%")
         if filter_ids is not None:
             body_q = body_q.in_("id", list(filter_ids))
+        if origin_source_ids is not None:
+            body_q = body_q.in_("source_id", list(origin_source_ids))
+        if entity_country_ids is not None:
+            body_q = body_q.in_("id", list(entity_country_ids))
         body_res = body_q.execute()
 
         all_ids = {row["id"] for row in (title_res.data or []) + (body_res.data or [])}
         return len(all_ids)
 
-    query = db.table("articles").select("id", count="exact").gt("expires_at", "now()")
+    query = db.table("articles").select("id", count="exact").or_("expires_at.is.null,expires_at.gt.now()")
     query = _apply_filters(query, source_id, from_date, to_date)
     if filter_ids is not None:
         query = query.in_("id", list(filter_ids))
+    if origin_source_ids is not None:
+        query = query.in_("source_id", list(origin_source_ids))
+    if entity_country_ids is not None:
+        query = query.in_("id", list(entity_country_ids))
 
     res = query.execute()
     return res.count or 0

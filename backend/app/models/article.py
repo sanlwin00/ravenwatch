@@ -9,6 +9,7 @@ class Article(BaseModel):
     id: UUID
     source_id: Optional[UUID] = None
     title: Optional[str] = None
+    title_en: Optional[str] = None
     url: str
     published_at: Optional[datetime] = None
     raw_text_en: Optional[str] = None
