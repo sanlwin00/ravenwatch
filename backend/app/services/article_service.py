@@ -18,7 +18,7 @@ async def _get_article_ids_with_entity_country(db: Client, country: str) -> set[
     entity_ids = [row["id"] for row in (ent_res.data or [])]
     if not entity_ids:
         return set()
-    ae_res = db.table("article_entities").select("article_id").in_("entity_id", entity_ids).execute()
+    ae_res = db.table("article_entities").select("article_id").in_("entity_id", entity_ids).limit(10000).execute()
     return {row["article_id"] for row in (ae_res.data or [])}
 
 
@@ -204,9 +204,15 @@ async def get_articles(
         # Also intersect with articles that have entities from the opposite country
         opposite = "MM" if source_origin == "china" else "CN"
         entity_country_ids = await _get_article_ids_with_entity_country(db, opposite)
-        # If no entities tagged yet, don't filter by entity country (graceful degradation)
+        if entity_country_ids:
+            # Intersect with source-origin articles client-side to keep the IN list small.
+            # Passing 700+ UUIDs in a query string exceeds URL length limits → 414/empty body.
+            src_res = db.table("articles").select("id").in_("source_id", list(origin_source_ids)).limit(10000).execute()
+            src_ids = {row["id"] for row in (src_res.data or [])}
+            entity_country_ids = entity_country_ids & src_ids
+            origin_source_ids = None  # intersection already encodes the source constraint
         if not entity_country_ids:
-            entity_country_ids = None
+            return []
 
     if search:
         # Title search
@@ -304,8 +310,13 @@ async def get_article_count(
             return 0
         opposite = "MM" if source_origin == "china" else "CN"
         entity_country_ids = await _get_article_ids_with_entity_country(db, opposite)
+        if entity_country_ids:
+            src_res = db.table("articles").select("id").in_("source_id", list(origin_source_ids)).limit(10000).execute()
+            src_ids = {row["id"] for row in (src_res.data or [])}
+            entity_country_ids = entity_country_ids & src_ids
+            origin_source_ids = None
         if not entity_country_ids:
-            entity_country_ids = None
+            return 0
 
     if search:
         # Must materialise results to count after dedup (same logic as get_articles)
